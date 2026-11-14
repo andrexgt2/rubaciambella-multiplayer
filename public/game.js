@@ -1,487 +1,328 @@
-(() => {
-'use strict';
-const $=id=>document.getElementById(id);
-const canvas=$('game'),ctx=canvas.getContext('2d');
-const W=1460,H=740;
-const BUMPERS=[{x:330,y:225,r:41},{x:1130,y:225,r:41},{x:330,y:515,r:41},{x:1130,y:515,r:41}];
-const OIL=[{x:725,y:168,r:49},{x:735,y:572,r:49},{x:195,y:367,r:37},{x:1265,y:367,r:37}];
-const PADS=[{x:580,y:365,r:36},{x:880,y:365,r:36}];
-let socket=null,playerId=null,roomCode=null,gameState=null,lastNow=Date.now(),connected=false;
-let retryTimer=null,connectVersion=0;
-const visuals=new Map(),keys={up:false,down:false,left:false,right:false,boost:false,blast:false,steer:null};
-const params=new URLSearchParams(location.search),initialRoom=(params.get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
-if(initialRoom) $('codeInput').value=initialRoom;
-try {$('nameInput').value=localStorage.getItem('rb_name')||'';}catch(_){}
-const getMe=()=>gameState?.players.find(p=>p.id===playerId);
-const isHost=()=>!!gameState && gameState.hostId===playerId;
-function setError(message){$('joinError').textContent=message||'';}
-// WebSocket nativi: Cloudflare Workers + Durable Objects (niente Socket.IO).
+import {WORLD,ROAD_WIDTH,LAP_COUNT,CENTERLINE,TRACK_LENGTH,pointAt,closestTrack} from './track.js';
+const $=id=>document.getElementById(id),clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
+const canvas=$('trackCanvas'),ctx=canvas.getContext('2d',{alpha:false});
+const state={socket:null,room:null,playerId:null,server:null,connected:false,version:0,lastPacket:0,
+  keys:{gas:false,brake:false,steer:0},name:'',oldPhase:'',lastLap:0,toastTimer:0};
+const visual=new Map();let camera={x:WORLD.width/2,y:WORLD.height/2,zoom:1},lastFrame=0;
+const roomFromUrl=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
+$('codeInput').value=roomFromUrl;
+try{$('nameInput').value=localStorage.getItem('gridline_name')||localStorage.getItem('rb_name')||'';}catch(_){ }
 const ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-function newRoomCode(){
-  const nums=new Uint32Array(6);crypto.getRandomValues(nums);
-  return [...nums].map(n=>ALPHABET[n%ALPHABET.length]).join('');
-}
-function send(type,payload={}){
-  if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type,...payload}));
-}
-function resetToJoin(){
-  playerId=null;gameState=null;connected=false;
-  document.body.classList.remove('game-active');
-  $('overlay').classList.remove('hidden');
-  $('joinPanel').classList.remove('hidden');
-  $('lobbyPanel').classList.add('hidden');
-  $('resultsPanel').classList.add('hidden');
-}
-function connect(data){
-  const version=++connectVersion;
-  clearTimeout(retryTimer);
-  if(socket){socket.onclose=null;socket.close();socket=null;}
-  roomCode=data.roomCode||newRoomCode();
-  resetToJoin();
-  setError('');$('joinBtn').disabled=true;$('joinBtn').textContent='CONNESSIONE...';
-  function openSocket(){
-    if(version!==connectVersion)return;
-    const scheme=location.protocol==='https:'?'wss:':'ws:';
-    socket=new WebSocket(scheme+'//'+location.host+'/api/room/'+encodeURIComponent(roomCode));
-    const current=socket;
-    let joined=false;
-    current.addEventListener('open',()=>{
-      if(version!==connectVersion)return;
-      $('connectionLabel').textContent='In collegamento al garage...';
-      send('join',{name:data.name});
+function newCode(){const a=new Uint32Array(6);crypto.getRandomValues(a);return [...a].map(n=>ALPHABET[n%ALPHABET.length]).join('');}
+const isHost=()=>state.server?.hostId===state.playerId;
+const getMe=()=>state.server?.players?.find(p=>p.id===state.playerId);
+const clock=t=>{const v=Math.max(0,Math.floor(t)),m=Math.floor(v/60);return String(m).padStart(2,'0')+':'+String(v%60).padStart(2,'0');};
+const lapTime=ms=>ms?`${(ms/1000).toFixed(2)}s`:'—';
+function toast(message){const el=$('toast');el.textContent=message;el.classList.remove('hidden');clearTimeout(state.toastTimer);state.toastTimer=setTimeout(()=>el.classList.add('hidden'),1800);}
+function send(type,fields={}){if(state.socket?.readyState===WebSocket.OPEN)state.socket.send(JSON.stringify({type,...fields}));}
+function connect(name,code){
+  const v=++state.version;state.name=name;state.room=code||newCode();state.playerId=null;state.connected=false;state.server=null;
+  if(state.socket){state.socket.onclose=null;state.socket.close();}
+  $('joinError').textContent='';$('joinBtn').disabled=true;$('joinBtn').innerHTML='CONNESSIONE...';
+  $('connectionLabel').textContent='COLLEGAMENTO IN CORSO';
+  function open(){
+    if(state.version!==v)return;
+    const protocol=location.protocol==='https:'?'wss:':'ws:';
+    const ws=new WebSocket(`${protocol}//${location.host}/api/room/${encodeURIComponent(state.room)}`);
+    state.socket=ws;let joined=false;
+    ws.addEventListener('open',()=>{
+      if(state.version!==v)return;
+      let resume='';try{resume=sessionStorage.getItem('gridline_resume_'+state.room)||'';}catch(_){ }
+      send('join',{name,resume});
     });
-    current.addEventListener('message',event=>{
-      let packet;try{packet=JSON.parse(event.data);}catch(_){return;}
-      if(packet.type==='joined'){
-        joined=true;connected=true;playerId=packet.playerId;
-        $('joinBtn').disabled=false;$('joinBtn').textContent='ENTRA IN PISTA →';
-        $('connectionLabel').textContent='Connesso al garage';
-        history.replaceState(null,'',location.pathname+'?room='+encodeURIComponent(roomCode));
-        $('roomLabel').textContent=roomCode;
-        try{localStorage.setItem('rb_name',data.name);}catch(_){}
-      }else if(packet.type==='state'){
+    ws.addEventListener('message',e=>{
+      let msg;try{msg=JSON.parse(e.data);}catch(_){return;}
+      if(msg.type==='joined'){
+        joined=true;state.connected=true;state.playerId=msg.playerId;
+        if(msg.resumeToken)try{sessionStorage.setItem('gridline_resume_'+state.room,msg.resumeToken);}catch(_){ }
+        $('joinBtn').disabled=false;$('joinBtn').innerHTML='ENTRA IN GRIGLIA <span>↗</span>';
+        $('connectionLabel').textContent='COLLEGATO ALLA GRIGLIA';
+        history.replaceState(null,'',location.pathname+'?room='+state.room);
+        try{localStorage.setItem('gridline_name',name);}catch(_){ }
+      }else if(msg.type==='state'){
         if(!joined)return;
-        const oldState=gameState;gameState=packet.state;lastNow=Date.now();hearNearbyHorns(oldState,gameState);updateUI();
-      }else if(packet.type==='join_error'||packet.type==='error'){
-        setError(packet.message||'Impossibile entrare nella stanza.');
-        $('joinBtn').disabled=false;$('joinBtn').textContent='ENTRA IN PISTA →';
+        state.server=msg.state;state.lastPacket=performance.now();updateUI();
+      }else if(msg.type==='join_error'||msg.type==='error'){
+        $('joinError').textContent=msg.message||'Impossibile entrare nella stanza.';
+        $('joinBtn').disabled=false;$('joinBtn').textContent='RIPROVA';
       }
     });
-    current.addEventListener('close',()=>{
-      if(version!==connectVersion)return;
-      resetToJoin();
-      $('connectionLabel').textContent='Connessione interrotta';
-      if(joined){
-        setError('Riconnessione in corso...');
-        retryTimer=setTimeout(openSocket,1600);
-      }else{
-        if(!$('joinError').textContent)setError('Connessione non riuscita. Riprova.');
-        $('joinBtn').disabled=false;$('joinBtn').textContent='ENTRA IN PISTA →';
-      }
-    });
-    current.addEventListener('error',()=>{
-      if(version===connectVersion)$('connectionLabel').textContent='Connessione non disponibile';
+    ws.addEventListener('close',()=>{
+      if(state.version!==v)return;
+      state.connected=false;releaseAll();$('connectionLabel').textContent='RICONNESSIONE...';
+      if(joined){toast('Riconnessione alla gara...');setTimeout(open,1300);}
+      else{$('joinError').textContent='Connessione non riuscita. Premi di nuovo ENTRA IN GRIGLIA.';
+        $('joinBtn').disabled=false;$('joinBtn').textContent='RIPROVA';}
     });
   }
-  openSocket();
+  open();
 }
-$('joinForm').addEventListener('submit',e=>{
-  e.preventDefault();
-  const name=$('nameInput').value.trim().slice(0,16)||'Pilota';
-  const code=$('codeInput').value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
-  connect({name,roomCode:code});
+$('joinForm').addEventListener('submit',event=>{
+  event.preventDefault();
+  connect($('nameInput').value.trim().slice(0,16)||'Pilota', $('codeInput').value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6));
 });
-$('startBtn').addEventListener('click',()=>send('start'));
-$('againBtn').addEventListener('click',()=>send('start'));
+$('startBtn').addEventListener('click',()=>{unlockAudio();send('start');try{screen.orientation?.lock?.('landscape').catch(()=>{});}catch(_){}});
+$('againBtn').addEventListener('click',()=>{unlockAudio();send('start');});
 $('copyBtn').addEventListener('click',async()=>{
-  const link=location.origin+location.pathname+'?room='+encodeURIComponent(roomCode);
-  try { await navigator.clipboard.writeText(link); $('copyBtn').textContent='COPIATO ✓'; }
-  catch(_){window.prompt('Copia questo link e invialo agli amici:',link);}
-  setTimeout(()=>$('copyBtn').textContent='COPIA LINK ↗',1800);
+  const link=location.origin+location.pathname+'?room='+state.room;
+  try{await navigator.clipboard.writeText(link);$('copyBtn').textContent='COPIATO ✓';toast('Invito copiato!');}
+  catch(_){prompt('Copia il link:',link);}
+  setTimeout(()=>$('copyBtn').textContent='COPIA INVITO ↗',1900);
 });
-// Clacson sintetizzato con Web Audio: nessun file audio esterno da scaricare.
-// Su iOS il contesto va sbloccato da un gesto reale (es. tap su BIP!).
-let soundContext=null;
-function audioContext(){
-  const Audio=window.AudioContext||window.webkitAudioContext;
-  if(!Audio)return null;
-  if(!soundContext){try{soundContext=new Audio();}catch(_){return null;}}
-  if(soundContext.state==='suspended')soundContext.resume().catch(()=>{});
-  return soundContext;
-}
-function honk(volume=1){
-  const a=audioContext();if(!a)return;
-  const t=a.currentTime;
-  for(const [frequency,level] of [[310,.085],[392,.055]]){
-    const osc=a.createOscillator(),gain=a.createGain();
-    osc.type='sawtooth';
-    osc.frequency.setValueAtTime(frequency,t);
-    osc.frequency.linearRampToValueAtTime(frequency*.93,t+.28);
-    gain.gain.setValueAtTime(0,t);
-    gain.gain.linearRampToValueAtTime(level*volume,t+.018);
-    gain.gain.setValueAtTime(level*volume,t+.13);
-    gain.gain.linearRampToValueAtTime(0,t+.18);
-    gain.gain.linearRampToValueAtTime(level*volume*.78,t+.205);
-    gain.gain.exponentialRampToValueAtTime(.0001,t+.37);
-    osc.connect(gain).connect(a.destination);
-    osc.start(t);osc.stop(t+.39);
-  }
-}
-// Il clacson avversario si sente solo se avviene vicino alla nostra macchina.
-function hearNearbyHorns(previous,next){
-  if(!previous||!playerId||next.phase!=='playing')return;
-  const me=next.players.find(p=>p.id===playerId);if(!me)return;
-  const before=new Map(previous.players.map(p=>[p.id,p.blastAt]));
-  for(const p of next.players){
-    if(p.id===playerId||!before.has(p.id)||p.blastAt<=0||p.blastAt===before.get(p.id))continue;
-    if(Math.hypot(p.x-me.x,p.y-me.y)<450)honk(.47);
-  }
-}
-const padIds=['up','down','left','right','boost','blast'];
-const keyName={ArrowUp:'up',KeyW:'up',ArrowDown:'down',KeyS:'down',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ShiftLeft:'boost',ShiftRight:'boost',Space:'blast'};
-document.addEventListener('keydown',e=>{
-  if(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)return;
-  const name=keyName[e.code];
-  if(name){
-    e.preventDefault();
-    if(name==='blast'&&!keys.blast&&gameState?.phase==='playing'){
-      const me=getMe();if(me&&gameState.serverNow>=me.blastReadyAt)honk();
-    }
-    keys[name]=true;
-  }
-});
-document.addEventListener('keyup',e=>{const name=keyName[e.code];if(name){e.preventDefault();keys[name]=false;}});
-// Joystick orizzontale a sterzo proporzionale: il piede destro accelera o frena.
-// Su Safari iOS impediamo selezione di testo, menu di pressione lunga e scroll.
-const controls=$('touchControls'),stick=$('joystick'),knob=$('joystickKnob');
-const pointers=new Map();
-let stickPointer=null;
-function clearStick(){
-  stickPointer=null;
-  keys.steer=null;
-  knob.style.transform='translate(0px, 0px)';
-  stick.classList.remove('engaged');
-}
-function moveStick(e){
-  const rect=stick.getBoundingClientRect();
-  const radius=rect.width*.30;
-  const x=e.clientX-(rect.left+rect.width/2);
-  const nx=Math.max(-1,Math.min(1,x/radius));
-  // Piccola zona morta al centro, sterzo progressivo e non tutto-o-niente.
-  const deadzone=.12;
-  keys.steer=Math.abs(nx)<deadzone?0:Math.sign(nx)*(Math.abs(nx)-deadzone)/(1-deadzone);
-  knob.style.transform=`translate(${(nx*radius).toFixed(1)}px, 0px)`;
-}
-stick.addEventListener('pointerdown',e=>{
-  if(stickPointer!==null)return;
-  e.preventDefault();
-  stickPointer=e.pointerId;
-  try{stick.setPointerCapture(e.pointerId);}catch(_){}
-  stick.classList.add('engaged');
-  moveStick(e);
-});
-stick.addEventListener('pointermove',e=>{
-  if(e.pointerId!==stickPointer)return;
-  e.preventDefault();moveStick(e);
-});
-function releaseStick(e){
-  if(e.pointerId!==stickPointer)return;
-  e.preventDefault();clearStick();
-}
-for(const eventName of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(eventName,releaseStick);
-for(const button of document.querySelectorAll('[data-control]')){
-  const control=button.dataset.control;
-  button.addEventListener('pointerdown',e=>{
-    e.preventDefault();
-    try{button.setPointerCapture(e.pointerId);}catch(_){}
-    pointers.set(e.pointerId,{control,button});keys[control]=true;
-    button.classList.add('pressed');
-    if(control==='blast'&&gameState?.phase==='playing'){
-      const me=getMe();
-      if(me&&gameState.serverNow>=me.blastReadyAt)honk();
-    }
-  });
-  const up=e=>{
-    const pointer=pointers.get(e.pointerId);if(!pointer)return;
-    e.preventDefault();pointers.delete(e.pointerId);
-    keys[pointer.control]=[...pointers.values()].some(v=>v.control===pointer.control);
-    pointer.button.classList.toggle('pressed',keys[pointer.control]);
-  };
-  for(const eventName of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(eventName,up);
-}
-// touchstart e touchmove esplicitamente non passivi: evitano il menu nativo di iOS.
-for(const eventName of ['touchstart','touchmove']){
-  controls.addEventListener(eventName,e=>{if(e.cancelable)e.preventDefault();},{passive:false});
-}
-for(const eventName of ['contextmenu','selectstart','dragstart']){
-  controls.addEventListener(eventName,e=>e.preventDefault());
-}
-function releaseControls(){
-  clearStick();pointers.clear();
-  for(const id of padIds)keys[id]=false;
-  keys.steer=null;
-  for(const button of controls.querySelectorAll('.pressed'))button.classList.remove('pressed');
-}
-window.addEventListener('blur',releaseControls);
-window.addEventListener('pagehide',releaseControls);
-document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseControls();});
-setInterval(()=>{if(connected&&playerId)send('input',{keys});},50);
-function hms(t){const s=Math.ceil(Math.max(0,t));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
-function setAbility(prefix,readyAt,now,cd){
-  const wait=Math.max(0,readyAt-now),fraction=1-Math.min(1,wait/cd);
-  $(prefix+'Fill').style.width=(fraction*100)+'%';
-  $(prefix+'State').textContent=wait>0?(wait/1000).toFixed(1)+'s':'PRONTO';
-  $(prefix+'State').style.color=wait>0?'#a8b0ce':'#8bf0b4';
-}
 function updateUI(){
-  const s=gameState;if(!s||!playerId)return;
-  const wasActive=document.body.classList.contains('game-active');
-  const active=s.phase==='playing'||s.phase==='countdown';
+  const s=state.server;if(!s)return;
+  const me=getMe();
+  const active=['racing','countdown'].includes(s.phase);
+  const currentPhase=me?.spectator&&active?'spectator':s.phase;
   document.body.classList.toggle('game-active',active);
-  if(wasActive!==active)requestAnimationFrame(resizeCanvas);
-  $('overlay').classList.toggle('hidden',s.phase==='playing'||s.phase==='countdown');
-  $('joinPanel').classList.add('hidden');
-  $('lobbyPanel').classList.toggle('hidden',s.phase!=='lobby');
+  $('hud').classList.toggle('hidden',!active);
+  $('overlay').classList.toggle('hidden',active&&!me?.spectator);
+  $('entryPanel').classList.add('hidden');
+  $('lobbyPanel').classList.toggle('hidden',!(s.phase==='lobby'||currentPhase==='spectator'));
   $('resultsPanel').classList.toggle('hidden',s.phase!=='results');
-  $('roomLabel').textContent=s.code;$('inviteCode').textContent=s.code;
-  $('phaseLabel').textContent=({lobby:'ASPETTANDO I PILOTI',countdown:'PARTENZA IMMINENTE',playing:s.frenzy?'MODALITÀ FOLLIA!':'CIAMBELLA IN FUGA',results:'GARA TERMINATA'})[s.phase];
-  $('timeLabel').textContent=hms(s.remaining);
   $('countdown').classList.toggle('hidden',s.phase!=='countdown');
-  $('countdown').textContent=String(s.countdown||'VIA!');
-  $('frenzy').classList.toggle('hidden',!s.frenzy);
-  $('lobbyCount').textContent=s.players.length+'/8';
+  $('countdown').classList.toggle('go',false);
+  if(s.phase==='countdown')$('countdown').querySelector('span').textContent=s.countdown||'VIA';
+  if(s.phase!=='countdown'&&state.oldPhase==='countdown'){toast('VIA!');beep(740,.15);}
+  if(state.oldPhase!=='results'&&s.phase==='results'){beep(520,.28);}
+  state.oldPhase=s.phase;
+  $('inviteCode').textContent=s.code;$('lobbyCount').textContent=s.players.length+' / 8';
+  $('hudRoom').textContent=s.code;
   $('lobbyPlayers').replaceChildren(...s.players.map(p=>{
-    const pill=document.createElement('div');pill.className='pilot-pill';
-    const dot=document.createElement('span');dot.className='dot';dot.style.background=p.color;
-    const label=document.createElement('span');label.textContent=p.name+(p.id===s.hostId?' 👑':'');
-    pill.append(dot,label);return pill;
+    const el=document.createElement('span');el.className='pilot-pill';
+    const dot=document.createElement('i');dot.style.background=p.color;
+    const n=document.createElement('span');n.textContent=p.name+(p.id===s.hostId?' ★':'');
+    el.append(dot,n);return el;
   }));
   $('startBtn').disabled=!isHost();
-  $('startBtn').textContent=s.players.length>1?'SI PARTE! →':'PROVA DA SOLO →';
-  $('hostHint').textContent=isHost()?'Sei il capo del garage: puoi avviare la partita.':'Aspetta che il capo del garage avvii la gara.';
-  const sorted=[...s.players].sort((a,b)=>b.score-a.score);
-  const myIndex=sorted.findIndex(p=>p.id===playerId);
-  $('hudRank').textContent='#'+(myIndex+1)+' / '+sorted.length;
-  $('hudScore').textContent=(getMe()?.score??0);
-  const scoreList=$('scoreboard');scoreList.replaceChildren(...sorted.map((p,i)=>{
-    const row=document.createElement('div');row.className='score-row'+(p.id===playerId?' me':'');
-    const rank=document.createElement('div');rank.className='score-rank'+(i===0?' first':'');rank.textContent='#'+(i+1);
-    const dot=document.createElement('div');dot.className='score-color';dot.style.background=p.color;
-    const name=document.createElement('div');name.className='score-name';name.textContent=p.name;
-    if(p.id===s.donut.ownerId){const icon=document.createElement('small');icon.textContent='🍩';name.append(icon);}
-    const score=document.createElement('div');score.className='score-number';score.textContent=p.score;
-    const points=document.createElement('small');points.textContent='PT';score.append(points);
-    row.append(rank,dot,name,score);return row;
+  $('startBtn').firstChild.textContent=s.players.filter(p=>!p.spectator).length>1?'ACCENDI I SEMAFORI ':'GARA DI PROVA ';
+  $('hostHint').textContent=me?.spectator?'Gara in corso: entrerai in pista alla prossima partenza.':
+    isHost()?'Sei il capostanza. Dai il via quando siete pronti.':'Aspetta che il capostanza avvii la gara.';
+  if(me){
+    $('positionValue').innerHTML=String(me.rank??'—')+'<span> / '+s.players.filter(p=>!p.spectator).length+'</span>';
+    $('lapValue').innerHTML=String(Math.min(me.laps+1,LAP_COUNT))+'<span> / '+LAP_COUNT+'</span>';
+    $('speedValue').textContent=String(Math.round(Math.max(0,me.speed)*.59)).padStart(3,'0');
+    if(me.laps&&me.lastLap!==state.lastLap){state.lastLap=me.lastLap;toast('GIRO '+me.laps+' · '+lapTime(me.lastLap));beep(960,.13);}
+  }
+  $('timerValue').textContent=clock(s.elapsed);
+  const sorted=[...s.players].filter(p=>!p.spectator).sort((a,b)=>(a.rank||99)-(b.rank||99));
+  $('raceStandings').classList.toggle('hidden',!active);
+  $('raceStandings').replaceChildren(...sorted.slice(0,5).map(p=>{
+    const el=document.createElement('div');el.className='racer'+(p.id===state.playerId?' me':'');el.style.setProperty('--racer',p.color);
+    const rank=document.createElement('i');rank.textContent=String(p.rank)+'.';
+    const name=document.createElement('span');name.textContent=p.name.slice(0,11);
+    el.append(rank,name);return el;
   }));
-  const me=getMe();const now=s.serverNow;
-  if(me){setAbility('boost',me.boostReadyAt,now,5500);setAbility('blast',me.blastReadyAt,now,6500);}
   if(s.phase==='results'){
-    const winner=sorted[0];$('winnerTitle').textContent=winner?`Vince ${winner.name}!`:'Che gara!';
-    $('winnerSubtitle').textContent='90 secondi di caos. Chi ha il coraggio della rivincita?';
-    $('podium').replaceChildren(...sorted.slice(0,5).map((p,i)=>{
+    const winner=sorted[0];$('resultsTitle').innerHTML=winner?'GARA <em>FINITA.</em>':'FINISH <em>LINE.</em>';
+    $('resultsSubtitle').textContent=winner?'Vince '+winner.name+' · Il prossimo giro è tuo.':'Un circuito. Otto storie diverse.';
+    $('podium').replaceChildren(...sorted.map(p=>{
       const row=document.createElement('div');row.className='podium-row';
-      const name=document.createElement('span');name.textContent=['🥇 ','🥈 ','🥉 '][i]||'🏎️ ';name.textContent+=p.name;
-      const pts=document.createElement('strong');pts.textContent=p.score+' PT';row.append(name,pts);return row;
+      const name=document.createElement('span');name.textContent=`#${p.rank}  ${p.name}`;
+      const time=document.createElement('strong');time.textContent=p.finishedAt?'FINITO':p.laps+' / '+LAP_COUNT+' GIRI';
+      row.append(name,time);return row;
     }));
-    $('againBtn').disabled=!isHost();
-    $('againHint').textContent=isHost()?'Premi per una nuova sfida.':'Aspetta che il capo del garage avvii la rivincita.';
+    $('againBtn').disabled=!isHost();$('againHint').textContent=isHost()?'Sei tu a dare il via alla prossima gara.':'Aspetta il via del capostanza.';
   }
 }
-function roundRect(x,y,w,h,r,fill,stroke){ctx.beginPath();ctx.roundRect(x,y,w,h,r);if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.stroke();}}
-function drawArena(t){
-  const bg=ctx.createLinearGradient(0,0,W,H);bg.addColorStop(0,'#28375b');bg.addColorStop(.5,'#1c2a47');bg.addColorStop(1,'#283553');ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
-  ctx.save();ctx.globalAlpha=.23;ctx.strokeStyle='#66749a';ctx.lineWidth=1;
-  for(let x=40;x<W;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-  for(let y=40;y<H;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-  ctx.restore();
-  ctx.save();ctx.strokeStyle='#404f77';ctx.lineWidth=30;ctx.strokeRect(17,17,W-34,H-34);
-  ctx.strokeStyle='#d9bf72';ctx.lineWidth=5;ctx.setLineDash([19,25]);ctx.strokeRect(27,27,W-54,H-54);ctx.setLineDash([]);ctx.restore();
-  // Neon stadium details.
-  ctx.save();ctx.lineWidth=3;ctx.strokeStyle='#475777';
-  ctx.beginPath();ctx.ellipse(W/2,H/2,350,265,0,0,Math.PI*2);ctx.stroke();
-  ctx.beginPath();ctx.ellipse(W/2,H/2,455,315,0,0,Math.PI*2);ctx.stroke();
-  ctx.restore();
-  ctx.save();ctx.globalAlpha=.12;ctx.translate(W/2,H/2);ctx.rotate(-.13);
-  ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font='900 100px sans-serif';ctx.fillText('RUBA',0,-14);ctx.fillText('CIAMBELLA',0,77);ctx.restore();
-  // Oil puddles, swirling rings.
-  for(const oil of OIL){
-    ctx.save();ctx.translate(oil.x,oil.y);ctx.rotate(t*.0002+oil.x);
-    const grad=ctx.createRadialGradient(0,0,5,0,0,oil.r);grad.addColorStop(0,'#0b0f2d');grad.addColorStop(.7,'#10152c');grad.addColorStop(1,'#41386c');
-    ctx.fillStyle=grad;ctx.beginPath();ctx.ellipse(0,0,oil.r*1.05,oil.r*.72,.4,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#8466b4';ctx.lineWidth=2.5;ctx.setLineDash([11,15]);ctx.beginPath();ctx.ellipse(0,0,oil.r*.69,oil.r*.47,.4,0,Math.PI*2);ctx.stroke();ctx.restore();
+// Comandi touch: una mano sterza, l'altra tiene premuti i pedali.
+const steerPad=$('steerPad'),steerThumb=$('steerThumb'),controls=$('touchControls');
+let steerPointer=null;const pedalPointers=new Map();
+function steerTo(e){
+  const r=steerPad.getBoundingClientRect(),range=Math.max(1,(r.width-83)/2),x=e.clientX-(r.left+r.width/2);
+  const v=clamp(x/range,-1,1);state.keys.steer=Math.abs(v)<.10?0:v;
+  steerThumb.style.transform=`translateX(${(state.keys.steer*range).toFixed(1)}px)`;
+  steerPad.classList.toggle('pressed',Math.abs(state.keys.steer)>.12);
+}
+steerPad.addEventListener('pointerdown',e=>{
+  if(steerPointer!==null)return;e.preventDefault();unlockAudio();steerPointer=e.pointerId;
+  try{steerPad.setPointerCapture(e.pointerId);}catch(_){ }steerTo(e);
+});
+steerPad.addEventListener('pointermove',e=>{if(e.pointerId===steerPointer){e.preventDefault();steerTo(e);}});
+function releaseSteer(e){if(e.pointerId!==steerPointer)return;steerPointer=null;state.keys.steer=0;steerThumb.style.transform='translateX(0px)';steerPad.classList.remove('pressed');}
+for(const ev of ['pointerup','pointercancel','lostpointercapture'])steerPad.addEventListener(ev,releaseSteer);
+for(const button of controls.querySelectorAll('[data-control]')){
+  const key=button.dataset.control;
+  button.addEventListener('pointerdown',e=>{
+    e.preventDefault();unlockAudio();try{button.setPointerCapture(e.pointerId);}catch(_){ }
+    pedalPointers.set(e.pointerId,key);state.keys[key]=true;button.classList.add('pressed');
+  });
+  const release=e=>{
+    if(!pedalPointers.has(e.pointerId))return;
+    const control=pedalPointers.get(e.pointerId);pedalPointers.delete(e.pointerId);
+    state.keys[control]=[...pedalPointers.values()].includes(control);
+    button.classList.toggle('pressed',state.keys[control]);
+  };
+  for(const ev of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(ev,release);
+}
+for(const ev of ['touchstart','touchmove'])controls.addEventListener(ev,e=>{if(e.cancelable)e.preventDefault();},{passive:false});
+for(const ev of ['contextmenu','selectstart','dragstart'])controls.addEventListener(ev,e=>e.preventDefault());
+function releaseAll(){state.keys.gas=false;state.keys.brake=false;state.keys.steer=0;
+  steerPointer=null;pedalPointers.clear();steerThumb.style.transform='translateX(0px)';steerPad.classList.remove('pressed');
+  for(const button of controls.querySelectorAll('.pressed'))button.classList.remove('pressed');
+}
+window.addEventListener('blur',releaseAll);window.addEventListener('pagehide',releaseAll);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAll();});
+const held=new Set();
+document.addEventListener('keydown',e=>{
+  if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement)return;
+  if(['KeyW','ArrowUp','KeyS','ArrowDown','Space','KeyA','ArrowLeft','KeyD','ArrowRight'].includes(e.code)){e.preventDefault();held.add(e.code);syncKeys();}
+});
+document.addEventListener('keyup',e=>{held.delete(e.code);syncKeys();});
+function syncKeys(){state.keys.gas=held.has('KeyW')||held.has('ArrowUp');state.keys.brake=held.has('KeyS')||held.has('ArrowDown')||held.has('Space');
+  state.keys.steer=(held.has('KeyD')||held.has('ArrowRight')?1:0)-(held.has('KeyA')||held.has('ArrowLeft')?1:0);
+}
+setInterval(()=>{if(state.connected&&state.playerId)send('input',{keys:state.keys});},50);
+// Audio feedback leggeri, senza risorse esterne. Sono attivi solo dopo un gesto dell'utente.
+let audio=null;function unlockAudio(){try{audio??=new (window.AudioContext||window.webkitAudioContext)();audio.resume?.().catch(()=>{});}catch(_){}}
+function beep(freq=740,length=.12){if(!audio||audio.state!=='running')return;try{const o=audio.createOscillator(),g=audio.createGain();
+  o.type='triangle';o.frequency.value=freq;g.gain.setValueAtTime(.065,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+length);
+  o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+length);
+}catch(_){}}
+// Sfondo del circuito pre-renderizzato (una sola volta) per preservare FPS su telefoni.
+const surface=document.createElement('canvas');surface.width=WORLD.width;surface.height=WORLD.height;
+const sc=surface.getContext('2d',{alpha:false});
+function seeded(seed){let x=seed;return()=>{x=(Math.imul(x,1664525)+1013904223)>>>0;return x/4294967296;};}
+const rand=seeded(84563);
+function roadPath(c){c.beginPath();c.moveTo(CENTERLINE[0].x,CENTERLINE[0].y);
+  for(let i=1;i<CENTERLINE.length;i++)c.lineTo(CENTERLINE[i].x,CENTERLINE[i].y);c.closePath();}
+function paintSurface(){
+  const bg=sc.createLinearGradient(0,0,WORLD.width,WORLD.height);bg.addColorStop(0,'#3d644d');bg.addColorStop(.6,'#365946');bg.addColorStop(1,'#2c4f42');sc.fillStyle=bg;sc.fillRect(0,0,WORLD.width,WORLD.height);
+  // Fasce d'erba, trame e vegetazione fuori dal tracciato.
+  for(let i=0;i<32;i++){sc.fillStyle=i%2?'#ffffff04':'#061d0e0a';sc.fillRect(0,i*53,WORLD.width,26);}
+  for(let i=0;i<720;i++){
+    const x=rand()*WORLD.width,y=rand()*WORLD.height;
+    if(closestTrack(x,y).distance<ROAD_WIDTH/2+90)continue;
+    const r=1.5+rand()*4.2;sc.fillStyle=rand()>.5?'#72956c49':'#172f2a9a';sc.beginPath();sc.arc(x,y,r,0,Math.PI*2);sc.fill();
   }
-  // Rocket pads.
-  for(let i=0;i<PADS.length;i++){
-    const b=PADS[i],v=Math.sin(t*.006+i)*.5+.5;
-    ctx.save();ctx.translate(b.x,b.y);ctx.rotate(i===0?0:Math.PI);
-    ctx.shadowColor='#fbd760';ctx.shadowBlur=10+v*14;
-    roundRect(-42,-29,84,58,11,'#806f42','#f6d76b');ctx.shadowBlur=0;
-    ctx.fillStyle='#ffdd61';
-    for(let j=-1;j<=1;j++){
-      ctx.beginPath();ctx.moveTo(-7+j*16,-13);ctx.lineTo(15+j*16,0);ctx.lineTo(-7+j*16,13);ctx.closePath();ctx.fill();
+  // Sicurezza esterna, ghiaia, bordo e asfalto.
+  sc.save();sc.lineJoin='round';sc.lineCap='round';
+  roadPath(sc);sc.strokeStyle='#152e2b64';sc.lineWidth=ROAD_WIDTH+88;sc.stroke();
+  roadPath(sc);sc.strokeStyle='#a8a38d';sc.lineWidth=ROAD_WIDTH+60;sc.stroke();
+  roadPath(sc);sc.strokeStyle='#4b534f';sc.lineWidth=ROAD_WIDTH+23;sc.stroke();
+  roadPath(sc);sc.strokeStyle='#e0ddd0';sc.lineWidth=ROAD_WIDTH+10;sc.stroke();
+  roadPath(sc);sc.strokeStyle='#343d43';sc.lineWidth=ROAD_WIDTH;sc.stroke();
+  roadPath(sc);sc.lineWidth=ROAD_WIDTH-33;sc.strokeStyle='#3d454a';sc.stroke();
+  roadPath(sc);sc.lineWidth=ROAD_WIDTH-54;sc.strokeStyle='#394247';sc.stroke();
+  sc.restore();
+  // Cordoli a bande rosse e crema su entrambi i lati.
+  for(let s=0;s<TRACK_LENGTH;s+=19){
+    const p=pointAt(s),p2=pointAt(s+19.5);
+    for(const side of [-1,1]){
+      const offset=side*(ROAD_WIDTH/2+1);
+      const nx=-p.ty*offset,ny=p.tx*offset,n2x=-p2.ty*offset,n2y=p2.tx*offset;
+      sc.fillStyle=Math.floor(s/19)%2?'#f5eee2':'#d94e45';sc.beginPath();
+      sc.moveTo(p.x+nx,p.y+ny);sc.lineTo(p2.x+n2x,p2.y+n2y);
+      sc.lineTo(p2.x+n2x-p2.ty*side*12,p2.y+n2y+p2.tx*side*12);
+      sc.lineTo(p.x+nx-p.ty*side*12,p.y+ny+p.tx*side*12);sc.closePath();sc.fill();
     }
-    ctx.restore();
   }
-  // Bumpers.
-  for(const b of BUMPERS){
-    ctx.save();ctx.translate(b.x,b.y);
-    ctx.fillStyle='#080e23a0';ctx.beginPath();ctx.ellipse(5,10,b.r+8,b.r*.85,0,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#e85b89';ctx.strokeStyle='#ffb1c9';ctx.lineWidth=6;ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();ctx.stroke();
-    ctx.fillStyle='#77284e';ctx.beginPath();ctx.arc(0,0,b.r*.64,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='#ffb1c9';ctx.lineWidth=3;ctx.setLineDash([5,8]);ctx.beginPath();ctx.arc(0,0,b.r*.48,0,Math.PI*2);ctx.stroke();ctx.restore();
+  // Segni di corda e zone di frenata nelle curve.
+  sc.strokeStyle='#ffffff28';sc.lineWidth=2;sc.setLineDash([24,30]);
+  roadPath(sc);sc.stroke();sc.setLineDash([]);
+  // Start/finish a scacchi.
+  const line=pointAt(0);sc.save();sc.translate(line.x,line.y);sc.rotate(line.angle);
+  for(let a=0;a<2;a++)for(let b=0;b<12;b++){
+    sc.fillStyle=(a+b)%2?'#171e25':'#f6f2e6';sc.fillRect(a*12-12,-ROAD_WIDTH/2+b*ROAD_WIDTH/12,12,ROAD_WIDTH/12+.5);
   }
+  sc.restore();
+  // Griglia di partenza e indicazioni laterali.
+  for(let i=0;i<8;i++){
+    const pos=pointAt(260-Math.floor(i/2)*68),side=i%2===0?-37:37;
+    sc.save();sc.translate(pos.x-pos.ty*side,pos.y+pos.tx*side);sc.rotate(pos.angle);
+    sc.strokeStyle='#eef5d37c';sc.lineWidth=3;sc.strokeRect(-30,-18,59,36);sc.restore();
+  }
+  // Zona paddock che segnala l'inizio del giro.
+  const stand=pointAt(70);sc.save();sc.translate(stand.x-stand.ty*250,stand.y+stand.tx*250);sc.rotate(stand.angle);
+  sc.fillStyle='#122829';sc.fillRect(-120,-54,240,108);sc.fillStyle='#e6f052';sc.fillRect(-120,-54,240,9);
+  for(let j=0;j<6;j++){sc.fillStyle=j%2?'#1b4742':'#235c4a';sc.fillRect(-110+j*37,-35,29,69);}sc.restore();
+  // Strutture e alberi nel prato fuori dai limiti.
+  for(let i=0;i<140;i++){
+    const x=70+rand()*(WORLD.width-140),y=70+rand()*(WORLD.height-140);
+    if(closestTrack(x,y).distance<ROAD_WIDTH/2+100)continue;
+    const radius=9+rand()*12;
+    sc.fillStyle='#102d28a0';sc.beginPath();sc.ellipse(x+7,y+9,radius,radius*.75,0,0,Math.PI*2);sc.fill();
+    sc.fillStyle=rand()>.5?'#52774f':'#496b46';sc.beginPath();sc.arc(x,y,radius,0,Math.PI*2);sc.fill();
+    sc.fillStyle='#73905b';sc.beginPath();sc.arc(x-radius*.25,y-radius*.2,radius*.55,0,Math.PI*2);sc.fill();
+  }
+  // Sector markers are painted outside the asphalt; the server validates them invisibly.
+  for(let i=1;i<=3;i++){const p=pointAt(TRACK_LENGTH*i/4);sc.save();sc.translate(p.x,p.y);sc.rotate(p.angle);
+    sc.fillStyle='#e9f65b';sc.fillRect(-4,-ROAD_WIDTH/2-20,8,18);sc.fillRect(-4,ROAD_WIDTH/2+2,8,18);sc.restore();}
 }
-function drawDonut(x,y,t,scale=1){
-  ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
-  ctx.rotate(t*.001);ctx.shadowColor='#ffd271';ctx.shadowBlur=22;
-  ctx.fillStyle='#efb465';ctx.beginPath();ctx.arc(0,0,23,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
-  ctx.fillStyle='#fb75a5';ctx.beginPath();ctx.arc(0,0,18,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#9b6380';ctx.beginPath();ctx.arc(0,0,8,0,Math.PI*2);ctx.fill();
-  for(let i=0;i<9;i++){
-    const a=i*Math.PI*2/9,rad=14;
-    ctx.save();ctx.translate(Math.cos(a)*rad,Math.sin(a)*rad);ctx.rotate(a);
-    ctx.fillStyle=['#fff5ce','#89eeed','#e9f78a'][i%3];ctx.fillRect(-3,-1,6,2);ctx.restore();
-  }
+paintSurface();
+function carShape(p,isMe,elapsed){
+  const speed=Math.hypot(p.vx||0,p.vy||0),fast=speed>230;
+  ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.angle);
+  ctx.fillStyle='#07121675';ctx.beginPath();ctx.ellipse(5,5,33,18,0,0,Math.PI*2);ctx.fill();
+  if(fast){ctx.fillStyle='#d6e3e42c';ctx.fillRect(-55,-15,20,3);ctx.fillRect(-55,12,20,3);}
+  // Ruote scoperte, ala posteriore, fondo e ala anteriore: davanti sempre a destra.
+  ctx.fillStyle='#12181d';ctx.strokeStyle='#060e12';ctx.lineWidth=2;
+  for(const x of [-17,18])for(const y of [-17,17]){ctx.beginPath();ctx.roundRect(x-10,y-6.5,20,13,4);ctx.fill();ctx.stroke();}
+  ctx.fillStyle='#131d20';ctx.fillRect(-24,-15,6,30);
+  ctx.fillStyle=p.color;ctx.beginPath();ctx.roundRect(-22,-10,39,20,6);ctx.fill();
+  ctx.beginPath();ctx.moveTo(7,-9);ctx.lineTo(31,-4);ctx.lineTo(34,0);ctx.lineTo(31,4);ctx.lineTo(7,9);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#10191e';ctx.beginPath();ctx.ellipse(-3,0,11,7.2,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#f7f4e5';ctx.beginPath();ctx.arc(-3,0,4.5,0,Math.PI*2);ctx.fill();
+  // Muso fluorescente e alerone frontale visivamente inconfondibili.
+  ctx.fillStyle='#fff4d8';ctx.fillRect(31,-14,6,28);ctx.fillStyle='#e9f75c';ctx.fillRect(34,-12,4,24);
+  ctx.fillStyle='#f8514e';ctx.fillRect(-26,-12,5,7);ctx.fillRect(-26,5,5,7);
+  ctx.strokeStyle='#ffffff7c';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(-7,-8);ctx.lineTo(22,-4);ctx.stroke();
   ctx.restore();
-}
-function drawStar(x,y,t){
-  ctx.save();ctx.translate(x,y);ctx.rotate(t*.0012);ctx.shadowBlur=13;ctx.shadowColor='#ffd85d';ctx.fillStyle='#ffe37b';ctx.strokeStyle='#fff0b1';ctx.lineWidth=2;
-  ctx.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,r=i%2?7:16;ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);}ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
-}
-function drawCar(p,t){
-  let v=visuals.get(p.id);
-  if(!v){v={x:p.x,y:p.y,angle:p.angle};visuals.set(p.id,v);}
-  v.x+=(p.x-v.x)*.28;v.y+=(p.y-v.y)*.28;
-  const d=Math.atan2(Math.sin(p.angle-v.angle),Math.cos(p.angle-v.angle));v.angle+=d*.32;
-  const owner=gameState?.donut.ownerId===p.id;
-  const isMe=p.id===playerId;
-  if(owner){
-    ctx.save();ctx.strokeStyle='#ffe27a';ctx.lineWidth=4;ctx.globalAlpha=.6+Math.sin(t*.009)*.28;
-    ctx.setLineDash([12,12]);ctx.beginPath();ctx.arc(v.x,v.y,39,0,Math.PI*2);ctx.stroke();ctx.restore();
-    drawDonut(v.x,v.y-52+Math.sin(t*.007)*3,t,.72);
-  }
-  if(isMe){ctx.save();ctx.strokeStyle='#8de8ff';ctx.lineWidth=3;ctx.setLineDash([8,11]);ctx.beginPath();ctx.arc(v.x,v.y,40,0,Math.PI*2);ctx.stroke();ctx.restore();}
-  if(t - p.blastAt < 420 && p.blastAt>0){
-    const k=Math.max(0,(t-p.blastAt)/420);
-    ctx.save();ctx.strokeStyle=`rgba(255,214,90,${.9-k*.9})`;ctx.lineWidth=7*(1-k)+1;
-    ctx.beginPath();ctx.arc(v.x,v.y,25+k*124,0,Math.PI*2);ctx.stroke();ctx.restore();
-  }
-  ctx.save();ctx.translate(v.x,v.y);ctx.rotate(v.angle);
-  if(p.boostUntil>t){
-    const length=37+Math.random()*25;
-    ctx.shadowBlur=15;ctx.shadowColor='#ffd657';ctx.fillStyle='#f0ad45';
-    ctx.beginPath();ctx.moveTo(-27,-10);ctx.lineTo(-27-length,-2);ctx.lineTo(-27,3);ctx.fill();
-    ctx.beginPath();ctx.moveTo(-27,10);ctx.lineTo(-27-length,2);ctx.lineTo(-27,-3);ctx.fill();ctx.shadowBlur=0;
-  }
-  ctx.fillStyle='#080d1c8a';roundRect(-27,-15+7,57,34,10,'#090c1b80');
-  for(const [x,y] of [[-15,-18],[16,-18],[-15,18],[16,18]])roundRect(x-7,y-4,14,8,3,'#141726');
-  ctx.shadowColor=p.color;ctx.shadowBlur=8;
-  roundRect(-29,-16,58,32,11,p.color,'#ffffff55');ctx.shadowBlur=0;
-  roundRect(-6,-12,25,24,7,'#27344f');
-  roundRect(1,-10,12,20,4,'#a3dbea');
-  roundRect(-23,-9,10,18,4,'#ffffff44');
-  // Muso inconfondibile: triangolo a punta + due fari bianchi, fanali rossi dietro.
-  ctx.fillStyle='#ecf9ff';
-  ctx.beginPath();ctx.moveTo(12,-12);ctx.lineTo(34,0);ctx.lineTo(12,12);ctx.closePath();ctx.fill();
-  ctx.fillStyle='#173255';
-  ctx.beginPath();ctx.moveTo(17,-6);ctx.lineTo(26,0);ctx.lineTo(17,6);ctx.closePath();ctx.fill();
-  roundRect(28,-14,8,9,2,'#fff8ba');roundRect(28,5,8,9,2,'#fff8ba');
-  roundRect(-31,-12,6,9,1,'#ff324d');roundRect(-31,3,6,9,1,'#ff324d');
   if(isMe){
-    // Freccia davanti alla propria macchinina, sempre orientata nella direzione di marcia.
-    ctx.fillStyle='#79f5ff';ctx.shadowColor='#79f5ff';ctx.shadowBlur=9;
-    ctx.beginPath();ctx.moveTo(45,0);ctx.lineTo(35,-7);ctx.lineTo(35,7);ctx.closePath();ctx.fill();
+    ctx.save();ctx.strokeStyle='#eafb68';ctx.lineWidth=2;ctx.globalAlpha=.8+.2*Math.sin(elapsed*.008);ctx.setLineDash([8,5]);ctx.beginPath();ctx.arc(p.x,p.y,36,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+    ctx.translate(p.x+Math.cos(p.angle)*50,p.y+Math.sin(p.angle)*50);ctx.rotate(p.angle);
+    ctx.fillStyle='#edff6e';ctx.beginPath();ctx.moveTo(13,0);ctx.lineTo(-8,-7);ctx.lineTo(-8,7);ctx.closePath();ctx.fill();ctx.restore();
   }
-  ctx.restore();
-  ctx.save();ctx.textAlign='center';ctx.font='700 14px DM Sans,Arial,sans-serif';
-  const name=p.name+(isMe?' (TU)':'');const width=Math.min(220,ctx.measureText(name).width+21);
-  const y=v.y+(owner?-86:-43);
-  roundRect(v.x-width/2,y-16,width,23,7,'#0c1123c9');
-  ctx.fillStyle=owner?'#ffdb72':'#f4f5ff';ctx.fillText(name,v.x,y);
-  ctx.restore();
+  ctx.save();ctx.textAlign='center';ctx.font='800 12px DM Sans,Arial,sans-serif';ctx.fillStyle='#0b151de8';
+  const w=clamp(ctx.measureText(p.name).width+18,46,170);ctx.beginPath();ctx.roundRect(p.x-w/2,p.y-54,w,20,4);ctx.fill();
+  ctx.fillStyle=p.finishedAt?'#e6f45b':'#f4fbf4';ctx.fillText(p.name,p.x,p.y-40);ctx.restore();
 }
-// Vista dinamica: usa ogni pixel del campo disponibile (senza barre nere).
-// In verticale la camera inquadra la propria auto; in orizzontale mostra quasi tutta la pista.
-const canvasWrap=$('canvasWrap');
-const viewport={width:1200,height:740,dpr:1};
-const camera={x:W/2,y:H/2,ready:false};
-const coarse=window.matchMedia('(pointer: coarse)');
-function resizeCanvas(){
-  const rect=canvasWrap.getBoundingClientRect();
-  if(rect.width<2||rect.height<2)return;
-  const dpr=Math.min(window.devicePixelRatio||1,2);
-  viewport.width=rect.width;viewport.height=rect.height;viewport.dpr=dpr;
-  const w=Math.max(1,Math.round(rect.width*dpr));
-  const h=Math.max(1,Math.round(rect.height*dpr));
-  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+function fitCanvas(){const r=canvas.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);
+  const width=Math.max(1,Math.round(r.width*dpr)),height=Math.max(1,Math.round(r.height*dpr));
+  if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
+  return {w:r.width,h:r.height,dpr};
 }
-if(typeof ResizeObserver!=='undefined')new ResizeObserver(resizeCanvas).observe(canvasWrap);
-window.addEventListener('resize',resizeCanvas);
-window.addEventListener('orientationchange',()=>{camera.ready=false;requestAnimationFrame(resizeCanvas);});
-resizeCanvas();
-function cameraTransform(){
-  const {width:ww,height:hh,dpr}=viewport;
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.clearRect(0,0,ww,hh);
-  ctx.fillStyle='#192846';ctx.fillRect(0,0,ww,hh);
-  const active=document.body.classList.contains('game-active')&&coarse.matches;
-  const portrait=hh>ww;
-  let scale=active?Math.max(ww/W,hh/H):Math.min(ww/W,hh/H);
-  if(active){scale*=portrait?1.035:1.015;}
-  let targetX=W/2,targetY=H/2;
-  if(active&&portrait){
-    const me=getMe();
-    if(me){targetX=me.x+Math.cos(me.angle)*65;targetY=me.y+Math.sin(me.angle)*45;}
-  }
-  // Il mondo non deve lasciare scoperto lo sfondo anche vicino ai muri.
-  const halfW=ww/(2*scale),halfH=hh/(2*scale);
-  targetX=halfW>=W/2?W/2:Math.max(halfW,Math.min(W-halfW,targetX));
-  targetY=halfH>=H/2?H/2:Math.max(halfH,Math.min(H-halfH,targetY));
-  if(!camera.ready){camera.x=targetX;camera.y=targetY;camera.ready=true;}
-  const smoothing=active&&portrait?.13:.18;
-  camera.x+=(targetX-camera.x)*smoothing;
-  camera.y+=(targetY-camera.y)*smoothing;
-  ctx.translate(ww/2-camera.x*scale,hh/2-camera.y*scale);
-  ctx.scale(scale,scale);
-  return {scale,centerX:camera.x,centerY:camera.y,halfW,halfH};
-}
-function drawDonutPointer(view){
-  const s=gameState;
-  if(!s||s.phase!=='playing'||!document.body.classList.contains('game-active')||!coarse.matches)return;
-  const donut=s.donut; if(!donut||donut.ownerId===playerId)return;
-  const {centerX,centerY,halfW,halfH}=view;
-  const dx=donut.x-centerX,dy=donut.y-centerY;
-  if(Math.abs(dx)<halfW*.88&&Math.abs(dy)<halfH*.83)return;
-  // Indicatore per la ciambella fuori schermo (utile con la camera verticale).
-  const angle=Math.atan2(dy,dx);
-  const edge=Math.min((halfW*.77)/Math.max(.001,Math.abs(Math.cos(angle))),
-                      (halfH*.68)/Math.max(.001,Math.abs(Math.sin(angle))));
-  const x=centerX+Math.cos(angle)*edge,y=centerY+Math.sin(angle)*edge;
-  ctx.save();ctx.translate(x,y);ctx.rotate(angle);
-  roundRect(-12,-15,29,30,13,'#141b33ee','#ffd965');
-  ctx.fillStyle='#ffe26e';ctx.beginPath();ctx.moveTo(9,0);ctx.lineTo(-4,-8);ctx.lineTo(-4,8);ctx.closePath();ctx.fill();
-  ctx.restore();
-}
+const visible=new Map();
 function draw(now){
-  ctx.save();
-  const view=cameraTransform();
-  drawArena(now);
-  if(!gameState){
-    drawDonut(W/2,H/2+Math.sin(now*.002)*5,now,1.35);
-    const sample=[{x:590,y:340,angle:now*.0006,color:'#ffc95f',id:'demo1',name:'',boostUntil:0,blastAt:0},
-      {x:880,y:420,angle:-now*.0004,color:'#ff6597',id:'demo2',name:'',boostUntil:0,blastAt:0}];
-    for(const p of sample){ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.angle);roundRect(-32,-18,64,36,11,p.color);roundRect(-4,-13,23,26,6,'#394e74');ctx.restore();}
-  } else {
-    const s=gameState;
-    for(const c of s.candies)drawStar(c.x,c.y,now);
-    if(!s.donut.ownerId)drawDonut(s.donut.x,s.donut.y+Math.sin(now*.005)*5,now,1.1);
-    const ids=new Set(s.players.map(p=>p.id));
-    for(const id of visuals.keys())if(!ids.has(id))visuals.delete(id);
-    for(const p of s.players)drawCar(p,s.serverNow+(Date.now()-lastNow));
-    drawDonutPointer(view);
+  const d=Math.min(.05,Math.max(.005,(now-lastFrame)/1000||.016));lastFrame=now;
+  const {w,h,dpr}=fitCanvas();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+  const server=state.server,me=getMe();
+  const racing=server&&['racing','countdown'].includes(server.phase)&&me&&!me.spectator;
+  let targetX=WORLD.width/2,targetY=WORLD.height/2,targetZoom=Math.min(w/WORLD.width*.92,h/WORLD.height*.92);
+  if(racing){
+    let mine=visible.get(me.id);
+    if(!mine)mine={x:me.x,y:me.y,angle:me.angle};
+    // Un filo di look-ahead, ma non abbastanza da far uscire la macchina dall'inquadratura.
+    targetX=mine.x+Math.cos(mine.angle)*Math.min(65,Math.max(0,me.speed)*.16);
+    targetY=mine.y+Math.sin(mine.angle)*Math.min(45,Math.max(0,me.speed)*.10);
+    targetZoom=clamp(Math.min(w/810,h/390)*.98,.76,1.37);
+  }
+  const smooth=1-Math.exp(-(racing?7:3)*d);
+  camera.x+=(targetX-camera.x)*smooth;camera.y+=(targetY-camera.y)*smooth;
+  camera.zoom+=(targetZoom-camera.zoom)*smooth;
+  const zoom=camera.zoom;
+  ctx.save();ctx.translate(w/2,h*(racing?.46:.5));ctx.scale(zoom,zoom);ctx.translate(-camera.x,-camera.y);
+  ctx.drawImage(surface,0,0);
+  if(server){
+    const age=Math.min(.11,(now-state.lastPacket)/1000);
+    for(const p of server.players){
+      if(p.spectator)continue;
+      let v=visible.get(p.id);
+      if(!v){v={x:p.x,y:p.y,angle:p.angle};visible.set(p.id,v);}
+      const tx=p.x+(p.vx||0)*age*.48,ty=p.y+(p.vy||0)*age*.48;
+      const interp=1-Math.exp(-16*d);v.x+=(tx-v.x)*interp;v.y+=(ty-v.y)*interp;
+      const da=Math.atan2(Math.sin(p.angle-v.angle),Math.cos(p.angle-v.angle));v.angle+=da*interp;
+      carShape({...p,x:v.x,y:v.y,angle:v.angle},p.id===state.playerId,now);
+    }
+    const ids=new Set(server.players.map(p=>p.id));for(const id of visible.keys())if(!ids.has(id))visible.delete(id);
+  }else{
+    // Vetrina del circuito: due monoposto ferme sulla griglia.
+    const cars=[{name:'YOU',color:'#e4f156',...pointAt(220)},{name:'RIVAL',color:'#f56663',...pointAt(160)}];
+    cars.forEach(p=>carShape({...p,vx:0,vy:0},false,now));
   }
   ctx.restore();
+  // Ombreggiatura ai bordi, per staccare visivamente HUD e pedali.
+  const shade=ctx.createLinearGradient(0,h*.55,0,h);shade.addColorStop(0,'#06100e00');shade.addColorStop(1,'#06100e56');ctx.fillStyle=shade;ctx.fillRect(0,0,w,h);
   requestAnimationFrame(draw);
 }
 requestAnimationFrame(draw);
-})();

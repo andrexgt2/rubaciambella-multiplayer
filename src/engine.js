@@ -1,137 +1,151 @@
-// Motore di gioco condiviso, senza dipendenze Node.js / Socket.IO.
-export const W=1460,H=740,R=23,LIMIT=8,ROUND_MS=90000;
-export const COLORS=['#ffce57','#ff658b','#73e5ff','#9a8cff','#7ef0aa','#ffa36c','#ed8aff','#f5f57d'];
-export const BUMPERS=[{x:330,y:225,r:41},{x:1130,y:225,r:41},{x:330,y:515,r:41},{x:1130,y:515,r:41}];
-export const OIL=[{x:725,y:168,r:49},{x:735,y:572,r:49},{x:195,y:367,r:37},{x:1265,y:367,r:37}];
-export const PADS=[{x:580,y:365,r:36},{x:880,y:365,r:36}];
-const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
-const random=(a,b)=>a+Math.random()*(b-a);
-const dist2=(a,b)=>(a.x-b.x)**2+(a.y-b.y)**2;
-export const safeInput=data=>{
-  const input=['up','down','left','right','boost','blast'].reduce((a,k)=>(a[k]=data?.[k]===true,a),{});
-  // Sterzo analogico opzionale: i vecchi client con frecce/WASD funzionano comunque.
-  if(typeof data?.steer==='number'&&Number.isFinite(data.steer))input.steer=clamp(data.steer,-1,1);
-  return input;
-};
-export function makeRoom(code){return {code,players:new Map(),hostId:null,phase:'lobby',countdownEnds:0,matchEnds:0,
-  donut:{x:W/2,y:H/2,ownerId:null,lockUntil:0},candies:[],nextCandy:0,pickupId:0};}
-function respawnCandy(room){
-  for(let i=0;i<50;i++){
-    const c={id:++room.pickupId,x:random(82,W-82),y:random(86,H-86)};
-    if(BUMPERS.some(b=>dist2(c,b)<(b.r+48)**2))continue;
-    if(OIL.some(o=>dist2(c,o)<(o.r+23)**2))continue;
-    if(room.candies.some(v=>dist2(c,v)<90**2))continue;
-    room.candies.push(c);break;
-  }
-}
-// Posizioni di partenza lontane dalle pozzanghere d'olio e dai respingenti.
-// In precedenza il primo giocatore nasceva già su una chiazza d'olio!
-const STARTS=[[510,240],[950,500],[635,260],[825,480],[510,500],[950,240],[635,480],[825,260]];
-export function spawn(p,i,total){
-  const [x,y]=STARTS[i%STARTS.length];
-  p.x=x;p.y=y;p.angle=Math.atan2(H/2-y,W/2-x);
-  p.speed=0;p.kx=0;p.ky=0;p.boostUntil=0;p.boostReadyAt=0;
-  p.blastAt=0;p.shieldUntil=0;p.blastReadyAt=0;p.input={};p.prevInput={};
+import {WORLD, ROAD_WIDTH, TRACK_LENGTH, LAP_COUNT, RACE_LIMIT_MS, closestTrack,
+  pointAt, forwardDelta, checkpointS} from '../public/track.js';
+
+export const LIMIT=8;
+export const COLORS=['#ffce45','#f95b71','#5de2ee','#9875ff','#64eb9d','#ff984c','#e7a6ff','#f5f4ec'];
+const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
+export const safeInput=data=>({
+  steer:clamp(Number.isFinite(data?.steer)?data.steer:
+    (data?.right===true?1:0)-(data?.left===true?1:0),-1,1),
+  gas:data?.gas===true||data?.up===true,
+  brake:data?.brake===true||data?.down===true
+});
+export function makeRoom(code){return {version:5,code,hostId:null,phase:'lobby',players:new Map(),
+  countdownEnds:0,startedAt:0,raceEnds:0,resultsAt:0,finishedOrder:[]};}
+export function spawn(p,index=0){
+  // Griglia reale a due colonne, con il muso diretto verso il primo rettilineo.
+  const row=Math.floor(index/2),lane=index%2===0?-37:37;
+  const pos=pointAt(260-row*68);
+  p.x=pos.x-pos.ty*lane;p.y=pos.y+pos.tx*lane;p.angle=pos.angle;
+  p.vx=0;p.vy=0;p.speed=0;p.input=safeInput({});p.lastInputAt=0;
+  p.laps=0;p.nextGate=1;p.progress=closestTrack(p.x,p.y).s;
+  p.lapStartedAt=0;p.bestLap=0;p.lastLap=0;p.finishedAt=0;
+  p.spectator=false;p.offroad=false;p.hits=0;
 }
 export function startMatch(room,now=Date.now()){
-  const ps=[...room.players.values()];ps.forEach((p,i)=>{spawn(p,i,ps.length);p.score=0;});
-  room.phase='countdown';room.countdownEnds=now+3000;room.matchEnds=0;
-  room.donut={x:W/2,y:H/2,ownerId:null,lockUntil:0};room.candies=[];
-  for(let i=0;i<5;i++)respawnCandy(room);
-  room.nextCandy=now+5500;
+  const players=[...room.players.values()];
+  players.forEach((p,i)=>spawn(p,i));
+  room.phase='countdown';room.countdownEnds=now+4000;room.startedAt=0;
+  room.raceEnds=0;room.resultsAt=0;room.finishedOrder=[];
 }
-function transferDonut(room,id,now){
-  if(now<room.donut.lockUntil||room.donut.ownerId===id||!room.players.has(id))return false;
-  room.donut.ownerId=id;room.donut.lockUntil=now+850;return true;
-}
-function movePlayer(p,room,now,dt){
-  const inp=p.input,up=!!inp.up,down=!!inp.down,left=!!inp.left,right=!!inp.right;
-  if(inp.boost&&!p.prevInput.boost&&now>=p.boostReadyAt){
-    p.boostUntil=now+950;p.boostReadyAt=now+5500;p.speed=Math.max(p.speed,265);
+function movePlayer(p,dt,now){
+  const input=(now-(p.lastInputAt||0)<800)?p.input:safeInput({});
+  const before=closestTrack(p.x,p.y);
+  p.offroad=before.distance>ROAD_WIDTH*.5-9;
+  const gripping=p.offroad?.55:1;
+  const engine=330*gripping,brakes=510;
+  if(input.gas&&!input.brake){p.speed+=engine*dt;}
+  else if(input.brake){
+    p.speed=p.speed>4?Math.max(0,p.speed-brakes*dt):p.speed-230*dt;
+  } else {p.speed*=Math.exp(-1.25*dt);}
+  const maximum=p.offroad?200:438;
+  p.speed=clamp(p.speed,-100,maximum);
+  if(Math.abs(p.speed)<1&&!input.gas&&!input.brake)p.speed=0;
+  // Lo sterzo è analogico, progressivo, e non può ruotare l'auto da ferma.
+  const steer=clamp(input.steer||0,-1,1);
+  const turnRate=(.25+1.45*Math.min(1,Math.abs(p.speed)/205))*(p.speed< -3?-1:1);
+  p.angle+=steer*turnRate*dt*(p.offroad?.78:1);
+  // Grip laterale: niente scatti o giri sul posto. Una lieve deriva resta alle alte velocità.
+  const grip=(p.offroad?3.5:8.5)/(1+Math.abs(p.speed)/1000);
+  const desiredVX=Math.cos(p.angle)*p.speed,desiredVY=Math.sin(p.angle)*p.speed;
+  const smoothing=1-Math.exp(-grip*dt);
+  p.vx+=(desiredVX-p.vx)*smoothing;p.vy+=(desiredVY-p.vy)*smoothing;
+  p.x+=p.vx*dt;p.y+=p.vy*dt;
+  const nearest=closestTrack(p.x,p.y),barrier=ROAD_WIDTH*.5+33;
+  if(nearest.distance>barrier){
+    const nx=(p.x-nearest.x)/(nearest.distance||1),ny=(p.y-nearest.y)/(nearest.distance||1);
+    p.x=nearest.x+nx*barrier;p.y=nearest.y+ny*barrier;
+    const outward=p.vx*nx+p.vy*ny;
+    if(outward>0){p.vx-=nx*outward*1.45;p.vy-=ny*outward*1.45;}
+    p.speed*=.74;p.hits++;
   }
-  if(inp.blast&&!p.prevInput.blast&&now>=p.blastReadyAt){
-    p.blastAt=now;p.blastReadyAt=now+6500;
-    for(const other of room.players.values()){
-      if(other.id===p.id)continue;
-      const d=Math.hypot(other.x-p.x,other.y-p.y);
-      if(d<146){
-        const nx=(other.x-p.x)/(d||1),ny=(other.y-p.y)/(d||1);
-        const force=590*(1-d/180);other.kx+=nx*force;other.ky+=ny*force;other.speed*=.65;
-        if(room.donut.ownerId===other.id&&d<112&&other.shieldUntil<now)transferDonut(room,p.id,now);
-      }
+  p.x=clamp(p.x,40,WORLD.width-40);p.y=clamp(p.y,40,WORLD.height-40);
+  const track=closestTrack(p.x,p.y);
+  const delta=forwardDelta(p.progress,track.s);
+  if(track.distance<=ROAD_WIDTH*.5+4&&delta>0&&delta<Math.max(70,Math.abs(p.speed)*dt*2.3)){
+    advanceGates(p,track.s,now);
+  }else p.progress=track.s;
+}
+// Avanzamento dei soli checkpoint in ordine. Si chiama dal motore dopo la validazione
+// della distanza fisica percorsa; separato per testare ogni attraversamento di giro.
+export function advanceGates(p,newProgress,now){
+  const delta=forwardDelta(p.progress,newProgress);
+  if(delta>0&&delta<TRACK_LENGTH/8){
+    const target=checkpointS[p.nextGate-1];
+    const distanceToGate=(target-p.progress+TRACK_LENGTH)%TRACK_LENGTH;
+    if(distanceToGate<=delta+1){
+      if(p.nextGate===4){
+        p.laps++;
+        const lapTime=now-(p.lapStartedAt||now);
+        p.lastLap=lapTime;
+        if(!p.bestLap||lapTime<p.bestLap)p.bestLap=lapTime;
+        p.lapStartedAt=now;p.nextGate=1;
+        if(p.laps>=LAP_COUNT)p.finishedAt=now;
+      }else p.nextGate++;
     }
   }
-  p.prevInput={boost:!!inp.boost,blast:!!inp.blast};
-  const boosting=now<p.boostUntil;
-  if(up)p.speed+=(boosting?720:440)*dt;
-  else if(down){
-    // Prima frena completamente; continuando a premere si va in retromarcia.
-    if(p.speed>0)p.speed=Math.max(0,p.speed-760*dt);
-    else p.speed-=320*dt;
-  }else p.speed*=Math.exp(-2.85*dt);
-  p.speed=clamp(p.speed,-125,boosting?460:275);
-  const steer=typeof inp.steer==='number'?inp.steer:Number(right)-Number(left);
-  const steeringFactor=clamp(Math.abs(p.speed)/165,.28,1);
-  p.angle+=steer*1.75*steeringFactor*(p.speed< -5?-1:1)*dt;
-  if(OIL.some(o=>dist2(p,o)<(o.r+R-8)**2)){
-    // L'olio resta un ostacolo divertente, ma non ribalta più continuamente lo sterzo.
-    p.angle+=Math.sin(now/210+p.x)*dt*.55;p.speed*=Math.exp(-.35*dt);
+  p.progress=newProgress;
+}
+function collisions(players){
+  for(let i=0;i<players.length;i++)for(let j=i+1;j<players.length;j++){
+    const a=players[i],b=players[j];if(a.spectator||b.spectator||a.finishedAt||b.finishedAt)continue;
+    const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy),limit=43;
+    if(d>=limit)continue;
+    const nx=dx/(d||1),ny=dy/(d||1),overlap=(limit-d)/2+.1;
+    a.x-=nx*overlap;a.y-=ny*overlap;b.x+=nx*overlap;b.y+=ny*overlap;
+    const push=Math.min(90,Math.max(22,(Math.abs(a.speed)+Math.abs(b.speed))*.16));
+    a.vx-=nx*push;a.vy-=ny*push;b.vx+=nx*push;b.vy+=ny*push;
+    a.speed*=.90;b.speed*=.90;a.hits++;b.hits++;
   }
-  if(PADS.some(b=>dist2(p,b)<(b.r+R)**2)&&Math.abs(p.speed)>50)
-    p.speed=clamp(p.speed+120*dt,-155,boosting?540:350);
-  p.x+=Math.cos(p.angle)*p.speed*dt+p.kx*dt;
-  p.y+=Math.sin(p.angle)*p.speed*dt+p.ky*dt;
-  p.kx*=Math.exp(-4.7*dt);p.ky*=Math.exp(-4.7*dt);
-  if(p.x<R+17){p.x=R+17;p.speed*=-.45;p.kx=Math.abs(p.kx)*.4;}
-  if(p.x>W-R-17){p.x=W-R-17;p.speed*=-.45;p.kx=-Math.abs(p.kx)*.4;}
-  if(p.y<R+17){p.y=R+17;p.speed*=-.45;p.ky=Math.abs(p.ky)*.4;}
-  if(p.y>H-R-17){p.y=H-R-17;p.speed*=-.45;p.ky=-Math.abs(p.ky)*.4;}
-  for(const b of BUMPERS){
-    const dx=p.x-b.x,dy=p.y-b.y,d=Math.hypot(dx,dy),min=R+b.r;
-    if(d<min){const nx=dx/(d||1),ny=dy/(d||1);
-      p.x=b.x+nx*min;p.y=b.y+ny*min;p.kx+=nx*115;p.ky+=ny*115;p.speed*=-.4;
-    }
-  }
+}
+export function standings(room){
+  const racers=[...room.players.values()].filter(p=>!p.spectator);
+  const value=p=>{
+    if(p.finishedAt)return 1e9-p.finishedAt/1e10;
+    const base=(p.nextGate-1)*TRACK_LENGTH/4;
+    const max=(p.nextGate)*TRACK_LENGTH/4;
+    const local=(p.nextGate===1&&p.progress>TRACK_LENGTH*.85)?0:clamp(p.progress,base,max);
+    return p.laps*TRACK_LENGTH+local;
+  };
+  return racers.sort((a,b)=>{
+    if(a.finishedAt&&b.finishedAt)return a.finishedAt-b.finishedAt;
+    if(a.finishedAt)return -1;if(b.finishedAt)return 1;
+    return value(b)-value(a);
+  });
 }
 export function tick(room,now,dt){
-  if(room.phase==='countdown'&&now>=room.countdownEnds){room.phase='playing';room.matchEnds=now+ROUND_MS;}
-  if(room.phase!=='playing')return;
-  if(now>=room.matchEnds){room.phase='results';return;}
-  const ps=[...room.players.values()];
-  for(const p of ps)movePlayer(p,room,now,dt);
-  for(let i=0;i<ps.length;i++)for(let j=i+1;j<ps.length;j++){
-    const a=ps[i],b=ps[j],dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);
-    if(d<R*2){const nx=dx/(d||1),ny=dy/(d||1),push=(R*2-d)/2+.1;
-      a.x-=nx*push;a.y-=ny*push;b.x+=nx*push;b.y+=ny*push;
-      const impact=clamp((Math.abs(a.speed)+Math.abs(b.speed))*.43,95,350);
-      a.kx-=nx*impact;a.ky-=ny*impact;b.kx+=nx*impact;b.ky+=ny*impact;a.speed*=.68;b.speed*=.68;
-      if(room.donut.ownerId===a.id&&b.shieldUntil<now)transferDonut(room,b.id,now);
-      else if(room.donut.ownerId===b.id&&a.shieldUntil<now)transferDonut(room,a.id,now);
-    }
+  if(room.phase==='countdown'){
+    if(now>=room.countdownEnds){room.phase='racing';room.startedAt=now;
+      room.raceEnds=now+RACE_LIMIT_MS;
+      for(const p of room.players.values())p.lapStartedAt=now;
+    }else return;
   }
-  if(room.donut.ownerId&&!room.players.has(room.donut.ownerId)){
-    room.donut.ownerId=null;room.donut.x=W/2;room.donut.y=H/2;room.donut.lockUntil=now+500;
+  if(room.phase!=='racing')return;
+  const racers=[...room.players.values()].filter(p=>!p.spectator);
+  for(const p of racers){if(!p.finishedAt)movePlayer(p,Math.min(dt,.07),now);}
+  collisions(racers);
+  room.finishedOrder=standings(room).filter(p=>p.finishedAt).map(p=>p.id);
+  if(now>=room.raceEnds||(racers.length>0&&racers.every(p=>p.finishedAt))){
+    room.phase='results';room.resultsAt=now;
   }
-  const owner=room.players.get(room.donut.ownerId);
-  if(owner){room.donut.x=owner.x;room.donut.y=owner.y;owner.score+=dt*(room.matchEnds-now<20000?10:5);}
-  else for(const p of ps)if(dist2(p,room.donut)<(R+22)**2&&transferDonut(room,p.id,now))break;
-  for(let i=room.candies.length-1;i>=0;i--){
-    const candy=room.candies[i];for(const p of ps)if(dist2(p,candy)<(R+17)**2){
-      p.score+=5;room.candies.splice(i,1);break;
-    }
-  }
-  if(now>room.nextCandy&&room.candies.length<7){respawnCandy(room);room.nextCandy=now+4200;}
 }
 export function snapshot(room,now=Date.now()){
+  const ranked=standings(room);
   return {code:room.code,hostId:room.hostId,phase:room.phase,
+    lapsTotal:LAP_COUNT,serverNow:now,
     countdown:room.phase==='countdown'?Math.max(0,Math.ceil((room.countdownEnds-now)/1000)):0,
-    remaining:room.phase==='playing'?Math.max(0,(room.matchEnds-now)/1000):room.phase==='results'?0:90,
-    frenzy:room.phase==='playing'&&room.matchEnds-now<20000,
-    players:[...room.players.values()].map(p=>({id:p.id,name:p.name,color:p.color,x:p.x,y:p.y,
-      angle:p.angle,speed:p.speed,score:Math.floor(p.score),boostUntil:p.boostUntil,
-      boostReadyAt:p.boostReadyAt,blastReadyAt:p.blastReadyAt,blastAt:p.blastAt,
-      shieldUntil:p.shieldUntil})),donut:room.donut,candies:room.candies,serverNow:now};
+    elapsed:room.startedAt?Math.max(0,(now-room.startedAt)/1000):0,
+    remaining:room.phase==='racing'?Math.max(0,(room.raceEnds-now)/1000):RACE_LIMIT_MS/1000,
+    players:[...room.players.values()].map(p=>({id:p.id,name:p.name,color:p.color,
+      x:p.x,y:p.y,angle:p.angle,speed:p.speed,vx:p.vx,vy:p.vy,laps:p.laps,
+      nextGate:p.nextGate,progress:p.progress,lastLap:p.lastLap,bestLap:p.bestLap,
+      finishedAt:p.finishedAt,spectator:p.spectator,offroad:p.offroad,connected:p.connected!==false,
+      rank:p.spectator?null:ranked.indexOf(p)+1})),
+    finishedOrder:room.finishedOrder};
 }
-export function saveRoom(room){return {...room,players:[...room.players.values()]};}
-export function loadRoom(data,code){if(!data||!Array.isArray(data.players))return makeRoom(code);
-  return {...makeRoom(code),...data,code,players:new Map(data.players.map(p=>[p.id,p]))};}
+export const saveRoom=room=>({...room,players:[...room.players.values()]});
+export function loadRoom(data,code){
+  if(!data||data.version!==5||!Array.isArray(data.players))return makeRoom(code);
+  const room={...makeRoom(code),...data,code,players:new Map(data.players.map(p=>[p.id,p]))};
+  return room;
+}

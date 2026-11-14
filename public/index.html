@@ -2,74 +2,81 @@
 <html lang="it">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0e1023">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#080e14">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="description" content="Rubaciambella: il party game di macchinine da giocare con gli amici in multiplayer.">
-  <title>RUBACIAMBELLA · Microauto, maxi caos</title>
-  <link rel="stylesheet" href="/style.css?v=landscape-4">
+  <meta name="description" content="GRIDLINE GP: gare online in monoposto, fino a 8 amici sullo stesso circuito. Gioca da smartphone senza installare nulla.">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="stylesheet" href="/style.css?v=gp5-1">
+  <title>GRIDLINE GP · Formula racing multiplayer</title>
 </head>
 <body>
 <div class="app">
-  <header class="header">
-    <div class="brand"><div class="brand-logo" aria-hidden="true">◎</div><div><div class="brand-name">RUBA<span>CIAMBELLA</span><span class="brand-dot">.</span></div><div class="brand-subtitle">MICROAUTO, MAXI CAOS</div></div></div>
-    <div class="header-status"><span class="online-dot"></span><span id="connectionLabel">Pronto a partire</span><span class="header-divider"></span><span>PARTY RACER · 2–8 GIOCATORI</span></div>
+  <header class="site-header">
+    <div class="brand"><span class="brand-icon">G<span>///</span></span><span class="brand-word">GRIDLINE<span>GP</span></span></div>
+    <div class="header-note"><span class="live-light"></span><span id="connectionLabel">PRONTO A CORRERE</span><span class="header-separator">/</span>MULTIPLAYER IN TEMPO REALE</div>
   </header>
   <main>
-    <section class="hero"><div><div class="eyebrow">IL GIOCO PERFETTO PER ROVINARE LE AMICIZIE <span>✳</span></div><h1>Ruba la ciambella.<br><em>Non fartela rubare.</em></h1><p>Mini macchine, clacson devastanti e una sola ciambella. Vince chi se la tiene più a lungo. Sì, è tutto molto serio.</p></div><div class="hero-doodle" aria-hidden="true"><span>🍩</span><small>100% CAOS</small></div></section>
-    <div class="game-layout">
-      <section class="arena-card" aria-label="Arena di gioco">
-        <div class="arena-topbar"><div class="live-label"><span class="live-pulse"></span><span id="phaseLabel">PREPARATI AL CAOS</span></div><div class="race-hud" id="raceHud" aria-live="off"><span class="hud-pill" id="hudRank">#1 / 1</span><span class="hud-pill hud-points">⭐ <strong id="hudScore">0</strong> PT</span></div><div class="time-box"><span>⏱</span> <strong id="timeLabel">01:30</strong></div><div class="room-chip">STANZA <strong id="roomLabel">—</strong></div><span class="rotate-hint" aria-hidden="true">↻ GIRA IL TELEFONO</span></div>
-        <div class="canvas-wrap" id="canvasWrap">
-          <canvas id="game" width="1460" height="740" aria-label="Gioco di macchinine in vista dall'alto"></canvas>
-          <div class="overlay" id="overlay">
-            <div class="modal" id="joinPanel">
-              <div class="modal-icon">🍩</div><div class="modal-eyebrow">PRONTO PER IL DELIRIO?</div>
-              <h2>Accendi il motore.</h2><p>Entra in una stanza con gli amici o creane una nuova. Basta condividere un link.</p>
-              <form id="joinForm"><label for="nameInput">IL TUO NOME DA PILOTA</label><input id="nameInput" maxlength="16" placeholder="Es. TurboPatata" autocomplete="nickname" required>
-              <label for="codeInput">CODICE STANZA <span>(OPZIONALE)</span></label><input id="codeInput" maxlength="6" placeholder="Vuoto = nuova stanza" autocomplete="off" spellcheck="false">
-              <button class="primary-button" type="submit" id="joinBtn">ENTRA IN PISTA <span>→</span></button></form>
-              <div id="joinError" class="form-error" role="alert"></div><div class="modal-foot">Nessun account · Nessun download · Zero scuse</div>
-            </div>
-            <div class="modal hidden" id="lobbyPanel">
-              <div class="modal-icon">🏁</div><div class="modal-eyebrow">IL BOX DEI PILOTI</div><h2>Raduna la banda.</h2><p>Condividi il link e fai entrare tutti. Puoi anche provare il gioco da solo.</p>
-              <div class="invite-box"><span id="inviteCode">------</span><button type="button" id="copyBtn">COPIA LINK <span>↗</span></button></div>
-              <div class="lobby-label">PILOTI NELLA STANZA <strong id="lobbyCount">1/8</strong></div><div id="lobbyPlayers" class="lobby-players"></div>
-              <button class="primary-button" type="button" id="startBtn">SI PARTE! <span>→</span></button><div id="hostHint" class="host-hint"></div>
-            </div>
-            <div class="modal hidden" id="resultsPanel"><div class="modal-icon">🏆</div><div class="modal-eyebrow">FINE DEL DELIRIO</div><h2 id="winnerTitle">Che gara!</h2><p id="winnerSubtitle">I motori si spengono, gli sfottò no.</p><div id="podium" class="podium"></div><button class="primary-button" type="button" id="againBtn">RIVINCITA! <span>↻</span></button><div id="againHint" class="host-hint"></div></div>
-          </div>
-          <div id="countdown" class="countdown hidden" aria-live="polite">3</div>
-          <div id="frenzy" class="frenzy hidden">🔥 ULTIMI 20 SECONDI · PUNTI X2 🔥</div>
+    <div class="intro"><span class="overline">LA TUA GRIGLIA. LA TUA GARA.</span><h1>Non guardare la corsa.<br><em>Guidala.</em></h1><p>Otto monoposto. Un circuito. Nessuna scusa. Crea una stanza e sfida i tuoi amici in tempo reale.</p></div>
+    <section class="stage" id="stage" aria-label="Circuito di GRIDLINE GP">
+      <canvas id="trackCanvas" aria-label="Circuito e monoposto dall'alto"></canvas>
+      <div class="hud hidden" id="hud">
+        <div class="hud-main">
+          <div class="hud-pill position"><small>POS</small><strong id="positionValue">1<span> / 1</span></strong></div>
+          <div class="hud-pill lap"><small>GIRO</small><strong id="lapValue">1<span> / 3</span></strong></div>
+          <div class="hud-pill timer"><small>TEMPO</small><strong id="timerValue">00:00</strong></div>
         </div>
-        <div class="touch-controls" id="touchControls" aria-label="Comandi touch">
-          <div class="joystick-wrap">
-            <div class="joystick" id="joystick" role="group" aria-label="Sterzo: trascina a sinistra o destra">
-              <span class="joystick-direction left" aria-hidden="true">◀</span>
-              <span class="joystick-direction right" aria-hidden="true">▶</span>
-              <div class="joystick-knob" id="joystickKnob" aria-hidden="true"><span>↔</span></div>
-            </div>
-            <div class="joystick-caption">STERZO</div>
-          </div>
-          <div class="action-pad">
-            <button type="button" data-control="up" class="gas-btn" aria-label="Accelera: tieni premuto">▲<small>GAS</small></button>
-            <button type="button" data-control="down" class="brake-btn" aria-label="Frena, tieni premuto per la retromarcia">■<small>FRENO</small></button>
-            <button type="button" data-control="boost" class="boost-btn" aria-label="Attiva il turbo">⚡<small>TURBO</small></button>
-            <button type="button" data-control="blast" class="blast-btn" aria-label="Clacson sonoro d'urto">📣<small>BIP!</small></button>
-          </div>
+        <div class="hud-right"><div class="speed-readout"><strong id="speedValue">000</strong><small>KM/H</small></div><div class="hud-room" id="hudRoom">------</div></div>
+      </div>
+      <div class="race-standings hidden" id="raceStandings"></div>
+      <div class="countdown hidden" id="countdown"><span>3</span></div>
+      <div class="track-banner" id="trackBanner">CIRCUITO DELLE CRESTE <span>·</span> 3 GIRI <span>·</span> ONLINE</div>
+      <div class="overlay" id="overlay">
+        <div class="panel entry-panel" id="entryPanel">
+          <div class="panel-top"><span class="eyebrow"><span class="dot"></span> GARE ONLINE · 2–8 PILOTI</span><span class="edition">SEASON 01</span></div>
+          <div class="panel-mark">G<span>///</span></div>
+          <h2>GRIDLINE <em>GP</em></h2>
+          <p>La monoposto è pronta. Tu?</p>
+          <form id="joinForm">
+            <label for="nameInput">NOME PILOTA</label><input id="nameInput" autocomplete="nickname" maxlength="16" placeholder="Come vuoi farti chiamare?" required>
+            <label for="codeInput">CODICE STANZA <span>· se hai un invito</span></label><input id="codeInput" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Vuoto = nuova stanza">
+            <button class="primary-button" id="joinBtn" type="submit">ENTRA IN GRIGLIA <span>↗</span></button>
+          </form>
+          <div id="joinError" class="error" role="alert"></div>
+          <div class="panel-foot"><span>✦ NESSUN DOWNLOAD</span><span>✦ CROSS-PLATFORM</span></div>
         </div>
-        <div class="arena-bottom"><span><span class="circle-key">W</span><span class="circle-key">A</span><span class="circle-key">S</span><span class="circle-key">D</span> GUIDA</span><span><span class="rect-key">SHIFT</span> TURBO</span><span><span class="rect-key">SPAZIO</span> CLACSON</span><span class="mobile-tip">SU TELEFONO USA I COMANDI TOUCH</span></div>
-      </section>
-      <aside class="sidebar">
-        <section class="panel scoreboard"><div class="panel-header"><div><span class="mini-eyebrow">LA CLASSIFICA</span><h3>Il garage dei fenomeni</h3></div><span class="panel-symbol">★</span></div><div id="scoreboard" class="score-list"><div class="empty-score">Entra in pista per vedere chi comanda.</div></div></section>
-        <section class="panel ability-panel"><div class="panel-header"><div><span class="mini-eyebrow">IL TUO ARSENALE</span><h3>Armi improprie</h3></div><span class="panel-symbol">⚡</span></div><div class="ability-row"><div class="ability-icon yellow">⚡</div><div class="ability-info"><strong>Turbo</strong><span>Per fughe poco dignitose</span><div class="ability-track"><div id="boostFill"></div></div></div><span id="boostState" class="ability-state">PRONTO</span></div><div class="ability-row"><div class="ability-icon pink">📣</div><div class="ability-info"><strong>Clacson d'urto</strong><span>Spedisci gli amici altrove</span><div class="ability-track"><div id="blastFill"></div></div></div><span id="blastState" class="ability-state">PRONTO</span></div></section>
-        <section class="howto"><div class="howto-heading">🍩 &nbsp;LE REGOLE DEL CAOS</div><p><strong>1.</strong> Tocca la ciambella per prenderla.</p><p><strong>2.</strong> Guadagna punti mentre la porti.</p><p><strong>3.</strong> Tampona il portatore o usa il clacson per rubarla.</p><p><strong>4.</strong> Raccogli le stelline per punti extra. Negli ultimi 20 secondi la ciambella vale il doppio!</p></section>
-      </aside>
-    </div>
-    <footer class="footer"><span>FATTO PER LE SERATE CON GLI AMICI, NON PER I PROFESSIONISTI.</span><span>🍩 UN'IDEA ASSURDAMENTE SERIA</span></footer>
+        <div class="panel lobby-panel hidden" id="lobbyPanel">
+          <span class="eyebrow"><span class="dot"></span> BOX · STANZA PRIVATA</span>
+          <h2>Raduna <em>la griglia.</em></h2>
+          <p>Invita gli amici: quando siete pronti, il capostanza dà il via.</p>
+          <div class="room-invite"><span><small>CODICE STANZA</small><strong id="inviteCode">------</strong></span><button id="copyBtn" type="button">COPIA INVITO <span>↗</span></button></div>
+          <div class="lobby-title">PILOTI IN GRIGLIA <strong id="lobbyCount">1 / 8</strong></div>
+          <div class="pilot-list" id="lobbyPlayers"></div>
+          <button id="startBtn" class="primary-button" type="button">ACCENDI I SEMAFORI <span>→</span></button>
+          <div class="hint" id="hostHint">Aspetta il via del capostanza</div>
+        </div>
+        <div class="panel results-panel hidden" id="resultsPanel">
+          <span class="eyebrow"><span class="dot"></span> BANDIERA A SCACCHI</span>
+          <h2 id="resultsTitle">FINISH <em>LINE.</em></h2>
+          <p id="resultsSubtitle">Il cronometro non mente.</p>
+          <div class="podium" id="podium"></div>
+          <button class="primary-button" id="againBtn" type="button">NUOVA GARA <span>↻</span></button>
+          <div class="hint" id="againHint"></div>
+        </div>
+      </div>
+      <div class="touch-controls" id="touchControls" aria-label="Comandi di guida touchscreen">
+        <div class="steer-control"><div class="steer-track" id="steerPad" role="group" aria-label="Sterzo: trascina a sinistra o destra"><div class="steer-indicator"></div><div class="steer-thumb" id="steerThumb">◀ <span>G</span> ▶</div></div><span class="control-caption">STERZO</span></div>
+        <div class="pedals"><button type="button" id="gasBtn" data-control="gas" class="gas" aria-label="Acceleratore: tieni premuto"><span class="pedal-icon">▲</span><span>GAS</span></button><button type="button" id="brakeBtn" data-control="brake" class="brake" aria-label="Freno e retromarcia: tieni premuto"><span class="pedal-icon">■</span><span>FRENO</span></button></div>
+      </div>
+      <div class="toast hidden" id="toast" role="status"></div>
+    </section>
+    <div class="under-stage"><span>01 / CORSE DA 3 GIRI</span><span>02 / CAMERA DINAMICA</span><span>03 / PILOTI REALI</span><span class="desk-controls">PC: WASD / FRECCE · SPAZIO FRENO</span></div>
   </main>
+  <footer class="site-footer">GRIDLINE GP <span>·</span> UN CIRCUITO ORIGINALE. UNA GARA VERA.</footer>
 </div>
-<script src="/game.js?v=landscape-4"></script>
+<div class="rotate-gate" id="rotateGate"><div class="rotate-mark">G<span>///</span></div><div class="rotate-phone"><div class="rotate-screen"></div></div><div class="rotate-kicker">MODALITÀ GARA</div><h2>Gira il telefono.<br><em>Accendi la sfida.</em></h2><p>GRIDLINE GP è progettato per giocare in orizzontale. Ruota lo schermo per entrare in pista.</p><span class="rotate-bottom">↻ &nbsp; LANDSCAPE ONLY</span></div>
+<script type="module" src="/game.js?v=gp5-1"></script>
 </body>
 </html>

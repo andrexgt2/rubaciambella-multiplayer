@@ -1,67 +1,62 @@
-# 🍩 RUBACIAMBELLA — pubblicazione dal browser (senza installare nulla)
+# GRIDLINE GP 🏁
 
-Questa cartella contiene il codice della web app multiplayer per **Cloudflare Workers + Durable Objects**.
+Un gioco **multiplayer di corse con monoposto** progettato per smartphone in orizzontale. Nato come evoluzione di RUBACIAMBELLA, usa lo stesso progetto Cloudflare e lo stesso repository GitHub; il nuovo design e il gameplay sono originali e non affiliati alla Formula 1 o a Reckless Racing.
 
-## 1. Carica il progetto su GitHub
+![Anteprima della gara mobile](https://github.com/andrexgt2/rubaciambella-multiplayer)
 
-1. Apri https://github.com/new (crea un account gratuito se necessario).
-2. Nome repository: `rubaciambella-multiplayer`. Seleziona **Private** oppure **Public**. Non aggiungere un README iniziale.
-3. Crea il repository.
-4. Nella pagina del repository, apri **Add file > Upload files** (oppure **uploading an existing file**).
-5. **Estrai il contenuto di questo ZIP** e trascina nella pagina **i file e le cartelle contenuti dentro**, NON lo ZIP e NON una cartella contenitore aggiuntiva.
-6. Verifica che `wrangler.jsonc` e `package.json` siano nella radice del repository e che le cartelle `src` e `public` siano visibili.
-7. Conferma con **Commit changes**. Non caricare password, token o file `.dev.vars`.
+## Come si gioca
 
-## 2. Collega il repository a Cloudflare
+1. Apri il sito Cloudflare in **orizzontale** sul telefono (iOS o Android). Non serve installare niente.
+2. Inserisci il nome pilota e crea una stanza oppure entra con un codice di sei caratteri.
+3. Tocca **COPIA INVITO** e condividi il link con i tuoi amici (fino a 8 piloti contemporaneamente).
+4. Il primo giocatore è capostanza: avvia il countdown e tutti partono dalla stessa griglia.
+5. Completa **3 giri**, attraversando i checkpoint nell'ordine corretto. Vince chi taglia il traguardo per primo.
 
-1. Apri https://dash.cloudflare.com/ e vai a **Workers & Pages > Create application**.
-2. Scegli **GitHub** e autorizza l'accesso, se richiesto.
-3. Seleziona `rubaciambella-multiplayer`.
-4. Configura il progetto: nome Worker **`rubaciambella-multiplayer`** (deve corrispondere a `wrangler.jsonc`), branch di produzione **`main`**, directory radice **`/`**.
-5. **Build command**: lascia vuoto (questo progetto non richiede un passaggio di compilazione frontend).
-6. **Deploy command**: `npx wrangler deploy`.
-7. Seleziona **Save and Deploy** e attendi l'esito del build nella dashboard Cloudflare.
-8. Se il deploy riesce, apri l'URL `https://rubaciambella-multiplayer.<tuo-sottodominio>.workers.dev` fornito da Cloudflare (è solo un esempio: usa l'indirizzo effettivo).
+**Controlli telefono:** tieni premuto **GAS** per accelerare, **FRENO** per rallentare e, da fermo, inserire la retromarcia. Con il pollice sinistro trascina lo sterzo lateralmente. Entrambi i pollici funzionano contemporaneamente. Niente tasti superflui che coprono la pista.
 
-## 3. Gioca con gli amici
+**PC:** WASD o frecce direzionali; barra spaziatrice per frenare.
 
-Apri il sito, inserisci il nome da pilota, crea la stanza e usa **COPIA LINK** per condividere l'invito. Fino a 8 giocatori per stanza. Non serve installare nulla per giocare.
+La camera segue la monoposto, quindi la tua macchina resta vicino al centro dello schermo. Le barriere impediscono di tagliare fuori dal circuito. I piloti che entrano durante una gara diventano spettatori fino alla rivincita. Se Safari si riconnette entro circa 12 secondi, il pilota riprende lo stesso posto in gara.
 
-## Se qualcosa non funziona
+## Architettura
 
-- Se Cloudflare segnala un errore relativo al nome Worker, verifica che il nome del Worker sia `rubaciambella-multiplayer`, come in `wrangler.jsonc`.
-- Se non trova il file di configurazione, verifica che `wrangler.jsonc` sia nella radice del repository (non annidato in `rubaciambella-cloudflare/`).
-- Se la build o il deployment falliscono, guarda il messaggio in **Deployments / View build history**, e condividi l'errore per diagnosticare il problema.
-- Durable Objects SQLite sono disponibili sul piano gratuito, con limiti di risorse e richieste.
+- Frontend: Canvas 2D + HTML/CSS + Pointer Events; grafica del circuito prerenderizzata per non sovraccaricare gli smartphone.
+- Geometria condivisa: `public/track.js`, importata anche da `src/engine.js` per garantire gli stessi limiti pista sul client e sul server.
+- Backend: un **Cloudflare Durable Object** per stanza, WebSocket nativi; server autoritativo su fisica, posizioni, collisioni, checkpoint, tempi e classifica.
+- `src/index.js`: gestione stanze, riconnessione e socket; `src/engine.js`: gara, fisica e checkpoint.
+- `public/game.js`: controlli, camera, rendering e aggiornamento HUD.
+- Persistenza: stato stanza nel Durable Object e token di riconnessione in `sessionStorage` del browser. Nessuna password o credenziale nei file.
 
-Fonti: https://developers.cloudflare.com/workers/ci-cd/builds/ e https://developers.cloudflare.com/workers/ci-cd/builds/configuration/
+## Pubblicare su Cloudflare senza installare niente
 
-## Comandi mobile (versione touch)
+Se il Worker `rubaciambella-multiplayer` è già collegato al repository `andrexgt2/rubaciambella-multiplayer`:
 
-Su telefono la partita si apre in una schermata dedicata senza scorrimento della pagina.
-Trascina il **joystick a sinistra** verso l'alto per accelerare, verso destra/sinistra
-per sterzare (anche insieme) o verso il basso per fare retromarcia. Usa il pollice
-destro per il **TURBO** e il **BIP!** contemporaneamente alla guida.
+1. Vai in **Workers & Pages → rubaciambella-multiplayer → Settings → Builds** e verifica che la connessione GitHub sia attiva e il branch sia `main`.
+2. In **Deployments / Build History**, controlla che il commit più recente sia pubblicato con successo.
+3. Apri **l'URL workers.dev che già usi** e ruota il telefono. Se appare la versione vecchia, ricarica la pagina o aprila in una scheda privata.
 
-Durante la pressione dei controlli sono disattivati lo scroll e la selezione del testo
-(incluso il menu di selezione su Safari iOS). Su computer rimangono disponibili
-WASD o frecce, Shift e barra spaziatrice.
+Il nome del Worker in `wrangler.jsonc` è rimasto uguale per non creare un secondo sito. Non devi caricare uno ZIP se GitHub è collegato.
 
-## Comandi touchscreen v3
+Per avvio locale facoltativo (Node.js 20+):
 
-- Pollice sinistro: **sterzo orizzontale analogico** (niente accelerazione tramite joystick).
-- Pollice destro: tieni premuto **GAS** per accelerare; **FRENO** per rallentare e poi per la retromarcia.
-- **TURBO** e **BIP!** restano utilizzabili durante la guida.
-- Il clacson usa Web Audio, generato dal gioco al tocco, senza servizi esterni. Il volume dipende dalle impostazioni del dispositivo/browser.
-- Auto con muso a freccia bianca, fari chiari e retro rosso; la propria auto ha anche una freccia luminosa davanti.
-- Sterzata più delicata e partenze lontane dalle macchie d'olio.
+```sh
+npm install
+npm test
+npm run dev
+```
 
-## v4 — campo largo e schermo intero
+Per deploy manuale facoltativo: `npm run deploy`.
 
-- Arena multiplayer allargata da 1200×740 a **1460×740** coordinate: tutti i giocatori vedono la stessa pista.
-- **Telefono in orizzontale:** il canvas occupa lo schermo e volante/pedali sono sovrapposti ai bordi inferiori, rispettando le safe area degli iPhone. Nessuna rotazione forzata (Safari non la consente normalmente).
-- **Telefono in verticale:** visuale ingrandita che segue la propria auto in modo morbido; un indicatore mostra la direzione della ciambella quando è fuori inquadratura.
-- In partita HUD essenziale: tempo, posizione e punti. GAS, FRENO, TURBO, BIP! e volante restano identici alla v3.
-- Ottimizzazione schermi retina con canvas aggiornato da ResizeObserver.
+## Dettagli gara
 
-Per vedere la v4 in produzione controlla l'ultimo deployment GitHub nella dashboard Cloudflare; un commit su `main` non dimostra automaticamente l'esito del deploy.
+- Da 1 a 8 partecipanti per stanza (1 per provare il circuito; la modalità principale è multiplayer).
+- Tre giri con semaforo di partenza, checkpoint server-side e ordine di arrivo.
+- Durata massima della gara: 6 minuti; dopo il limite, classifica secondo giri/checkpoint e progressione raggiunta.
+- Monoposto originali colorate, pista con cordoli, ghiaia, paddock, griglia di partenza e paesaggio.
+- Solo landscape sui dispositivi touchscreen in modalità ritratto.
+
+## Test
+
+`npm test` esegue test del tracciato, dei controlli, delle barriere, dei tre giri, delle stanze condivise, della riconnessione e dell'API Worker. `npm run check` verifica la sintassi JavaScript.
+
+La visualizzazione è stata provata in Chromium simulando i viewport 844×390, 667×375 e 390×844 e i comandi touch combinati. La pubblicazione reale va comunque verificata nel proprio account Cloudflare e provata almeno con **due telefoni contemporaneamente**.

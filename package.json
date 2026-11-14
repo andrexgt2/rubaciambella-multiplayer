@@ -1,17 +1,19 @@
 {
-  "name": "rubaciambella-cloudflare",
-  "version": "2.0.0",
+  "name": "gridline-gp-cloudflare",
+  "version": "5.0.0",
   "private": true,
   "type": "module",
-  "description": "RUBACIAMBELLA: multiplayer WebSocket + Cloudflare Durable Objects",
+  "description": "GRIDLINE GP: Formula-style racing multiplayer, Cloudflare Workers e Durable Objects",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "node --test test/*.test.js",
-    "check": "node --check src/engine.js && node --check src/index.js && node --check public/game.js"
+    "check": "node --check public/track.js && node --check public/game.js && node --check src/engine.js && node --check src/index.js"
   },
   "devDependencies": {
     "wrangler": "^4.45.0"
   },
-  "engines": {"node": ">=20"}
+  "engines": {
+    "node": ">=20"
+  }
 }
