@@ -69,3 +69,10 @@ Per deploy manuale facoltativo: `npm run deploy`.
 `npm test` esegue test del tracciato, dei controlli, delle barriere, dei tre giri, delle stanze condivise, della riconnessione e dell'API Worker. `npm run check` verifica la sintassi JavaScript.
 
 La visualizzazione è stata provata in Chromium simulando i viewport 844×390, 667×375 e 390×844 e i comandi touch combinati. La pubblicazione reale va comunque verificata nel proprio account Cloudflare e provata almeno con **due telefoni contemporaneamente**.
+
+
+## V7: Motore di monoposto e cambio automatico
+
+Il motore audio ora usa due texture sonore di combustione e aspirazione create in Web Audio, non una singola onda sawtooth. Sei rapporti automatici cambiano in base alla velocità nella simulazione server: il regime sale prima della cambiata, poi scende quando entra il rapporto superiore. Si sente anche il breve taglio di potenza e uno scatto meccanico. In HUD compaiono il numero della marcia e una barra del regime. L'audio si attiva solo in seguito a un tocco, conserva il pulsante per disattivarlo ed è pensato per Safari e Android.
+
+**Nota:** il motore è una simulazione acustica originale, non una registrazione di un'autentica monoposto. Non sono stati inseriti audio di Formula 1 protetti da diritti. La classifica permanente e le stanze multiplayer rimangono invariate.

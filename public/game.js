@@ -154,6 +154,8 @@ function updateUI(){
     $('positionValue').innerHTML=String(me.rank??'—')+'<span> / '+s.players.filter(p=>!p.spectator).length+'</span>';
     $('lapValue').innerHTML=String(Math.min(me.laps+1,LAP_COUNT))+'<span> / '+LAP_COUNT+'</span>';
     $('speedValue').textContent=String(Math.round(Math.max(0,me.speed)*.59)).padStart(3,'0');
+    $('gearValue').textContent=me.speed<-3?'R':String(me.gear||1);
+    $('rpmValue').style.setProperty('--rev',String(Math.min(100,Math.round(((me.rpm||3300)-3000)/9000*100)))+'%');
     if(me.laps&&me.lastLap!==state.lastLap){state.lastLap=me.lastLap;toast('GIRO '+me.laps+' · '+lapTime(me.lastLap));beep(960,.13);setTimeout(loadRecords,1300);}
     if(me.hits>state.lastHit){state.lastHit=me.hits;sound.hit();}
     else if(me.hits<state.lastHit)state.lastHit=me.hits;
@@ -335,7 +337,9 @@ function draw(now){
   const d=Math.min(.05,Math.max(.005,(now-lastFrame)/1000||.016));lastFrame=now;
   const {w,h,dpr}=fitCanvas();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
   const server=state.server,me=getMe();
-  sound.update(me?.speed||0,state.keys.gas,server?.phase==='racing'&&!me?.spectator,!!me?.offroad);
+  sound.update({speed:me?.speed||0,gas:state.keys.gas,brake:state.keys.brake,
+    racing:server?.phase==='racing'&&!me?.spectator,offroad:!!me?.offroad,
+    gear:me?.gear||1,rpm:me?.rpm||3300,shiftSeq:me?.shiftSeq||0});
   const racing=server&&['racing','countdown'].includes(server.phase)&&me&&!me.spectator;
   let targetX=WORLD.width/2,targetY=WORLD.height/2,targetZoom=Math.min(w/WORLD.width*.92,h/WORLD.height*.92);
   if(racing){
