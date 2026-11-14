@@ -1,6 +1,6 @@
 {
   "name": "gridline-gp-cloudflare",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "private": true,
   "type": "module",
   "description": "GRIDLINE GP: Formula-style racing multiplayer, Cloudflare Workers e Durable Objects",
@@ -8,7 +8,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "node --test test/*.test.js",
-    "check": "node --check public/track.js && node --check public/game.js && node --check src/engine.js && node --check src/index.js"
+    "check": "node --check public/track.js && node --check public/audio.js && node --check public/game.js && node --check src/engine.js && node --check src/index.js"
   },
   "devDependencies": {
     "wrangler": "^4.45.0"

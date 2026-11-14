@@ -19,7 +19,7 @@ export function spawn(p,index=0){
   p.x=pos.x-pos.ty*lane;p.y=pos.y+pos.tx*lane;p.angle=pos.angle;
   p.vx=0;p.vy=0;p.speed=0;p.input=safeInput({});p.lastInputAt=0;
   p.laps=0;p.nextGate=1;p.progress=closestTrack(p.x,p.y).s;
-  p.lapStartedAt=0;p.bestLap=0;p.lastLap=0;p.finishedAt=0;
+  p.lapStartedAt=0;p.bestLap=0;p.lastLap=0;p.finishedAt=0;p.recordedLaps=0;
   p.spectator=false;p.offroad=false;p.hits=0;
 }
 export function startMatch(room,now=Date.now()){
@@ -139,7 +139,7 @@ export function snapshot(room,now=Date.now()){
     players:[...room.players.values()].map(p=>({id:p.id,name:p.name,color:p.color,
       x:p.x,y:p.y,angle:p.angle,speed:p.speed,vx:p.vx,vy:p.vy,laps:p.laps,
       nextGate:p.nextGate,progress:p.progress,lastLap:p.lastLap,bestLap:p.bestLap,
-      finishedAt:p.finishedAt,spectator:p.spectator,offroad:p.offroad,connected:p.connected!==false,
+      finishedAt:p.finishedAt,hits:p.hits,spectator:p.spectator,offroad:p.offroad,connected:p.connected!==false,
       rank:p.spectator?null:ranked.indexOf(p)+1})),
     finishedOrder:room.finishedOrder};
 }

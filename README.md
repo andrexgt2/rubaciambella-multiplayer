@@ -18,6 +18,15 @@ Un gioco **multiplayer di corse con monoposto** progettato per smartphone in ori
 
 La camera segue la monoposto, quindi la tua macchina resta vicino al centro dello schermo. Le barriere impediscono di tagliare fuori dal circuito. I piloti che entrano durante una gara diventano spettatori fino alla rivincita. Se Safari si riconnette entro circa 12 secondi, il pilota riprende lo stesso posto in gara.
 
+## Audio e classifica persistente · v6
+
+- Motore sintetizzato in tempo reale che segue velocità e acceleratore, suoni di countdown, giro, urti e bandiera a scacchi. Non usa tracce o file audio esterni. L'audio si attiva dopo un gesto dell'utente, come richiesto dai browser mobile; l'icona ♫ permette di disattivarlo.
+- Pulsante **CLASSIFICA RECORD** nella schermata di ingresso, nel box e a fine gara: mostra i migliori **20 tempi sul giro** del Circuito delle Creste.
+- I record sono validati dal server, non inviati dal browser. Ogni nome pilota appare con il suo giro più veloce; nomi uguali condividono la stessa voce (non ci sono account autenticati).
+- I record vengono conservati nel Durable Object globale `gridline:global-laps:creste-v1`, usando il binding `GAME_ROOMS` già esistente e la chiave storage `best-laps-creste-v1`. Non dipendono dalla stanza né dai nuovi deploy; restano salvati salvo eliminazione esplicita dei dati del Durable Object.
+- Endpoint pubblico di sola lettura: `GET /api/leaderboard`, senza cache. Le scritture avvengono solo dal backend che valida i checkpoint; i giri inferiori a 12 secondi sono scartati come controllo minimo di plausibilità.
+- I record iniziano a popolarsi dalle nuove gare v6: non recuperano automaticamente i tempi delle versioni precedenti.
+
 ## Architettura
 
 - Frontend: Canvas 2D + HTML/CSS + Pointer Events; grafica del circuito prerenderizzata per non sovraccaricare gli smartphone.

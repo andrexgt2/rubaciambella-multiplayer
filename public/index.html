@@ -9,7 +9,7 @@
   <meta name="description" content="GRIDLINE GP: gare online in monoposto, fino a 8 amici sullo stesso circuito. Gioca da smartphone senza installare nulla.">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
-  <link rel="stylesheet" href="/style.css?v=gp5-1">
+  <link rel="stylesheet" href="/style.css?v=gp6-1">
   <title>GRIDLINE GP · Formula racing multiplayer</title>
 </head>
 <body>
@@ -28,7 +28,7 @@
           <div class="hud-pill lap"><small>GIRO</small><strong id="lapValue">1<span> / 3</span></strong></div>
           <div class="hud-pill timer"><small>TEMPO</small><strong id="timerValue">00:00</strong></div>
         </div>
-        <div class="hud-right"><div class="speed-readout"><strong id="speedValue">000</strong><small>KM/H</small></div><div class="hud-room" id="hudRoom">------</div></div>
+        <div class="hud-right"><button id="soundToggle" class="sound-toggle" type="button" aria-label="Disattiva audio" aria-pressed="true">♫</button><div class="speed-readout"><strong id="speedValue">000</strong><small>KM/H</small></div><div class="hud-room" id="hudRoom">------</div></div>
       </div>
       <div class="race-standings hidden" id="raceStandings"></div>
       <div class="countdown hidden" id="countdown"><span>3</span></div>
@@ -44,7 +44,7 @@
             <label for="codeInput">CODICE STANZA <span>· se hai un invito</span></label><input id="codeInput" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Vuoto = nuova stanza">
             <button class="primary-button" id="joinBtn" type="submit">ENTRA IN GRIGLIA <span>↗</span></button>
           </form>
-          <div id="joinError" class="error" role="alert"></div>
+          <div id="joinError" class="error" role="alert"></div><button class="records-link" type="button" data-open-records>🏆 CLASSIFICA RECORD · TOP 20 ↗</button>
           <div class="panel-foot"><span>✦ NESSUN DOWNLOAD</span><span>✦ CROSS-PLATFORM</span></div>
         </div>
         <div class="panel lobby-panel hidden" id="lobbyPanel">
@@ -55,7 +55,7 @@
           <div class="lobby-title">PILOTI IN GRIGLIA <strong id="lobbyCount">1 / 8</strong></div>
           <div class="pilot-list" id="lobbyPlayers"></div>
           <button id="startBtn" class="primary-button" type="button">ACCENDI I SEMAFORI <span>→</span></button>
-          <div class="hint" id="hostHint">Aspetta il via del capostanza</div>
+          <div class="hint" id="hostHint">Aspetta il via del capostanza</div><button class="records-link" type="button" data-open-records>🏆 CLASSIFICA DEI TEMPI ↗</button>
         </div>
         <div class="panel results-panel hidden" id="resultsPanel">
           <span class="eyebrow"><span class="dot"></span> BANDIERA A SCACCHI</span>
@@ -63,7 +63,15 @@
           <p id="resultsSubtitle">Il cronometro non mente.</p>
           <div class="podium" id="podium"></div>
           <button class="primary-button" id="againBtn" type="button">NUOVA GARA <span>↻</span></button>
-          <div class="hint" id="againHint"></div>
+          <div class="hint" id="againHint"></div><button class="records-link" type="button" data-open-records>🏆 RECORD DEL CIRCUITO ↗</button>
+        </div>
+        <div class="panel records-panel hidden" id="recordsPanel">
+          <span class="eyebrow"><span class="dot"></span> RECORD DEL CIRCUITO</span>
+          <h2>HALL OF <em>FAME.</em></h2>
+          <p>I 20 migliori giri sul Circuito delle Creste, registrati online e conservati tra le gare.</p>
+          <div class="record-list" id="recordList" aria-live="polite"><p>Caricamento classifica…</p></div>
+          <div class="record-actions"><button type="button" id="refreshRecords">AGGIORNA ↻</button><button type="button" id="closeRecords">TORNA ALLA GARA →</button></div>
+          <div class="record-note">Tempi convalidati dal server. Un record per nome pilota, nessun account richiesto.</div>
         </div>
       </div>
       <div class="touch-controls" id="touchControls" aria-label="Comandi di guida touchscreen">
@@ -77,6 +85,6 @@
   <footer class="site-footer">GRIDLINE GP <span>·</span> UN CIRCUITO ORIGINALE. UNA GARA VERA.</footer>
 </div>
 <div class="rotate-gate" id="rotateGate"><div class="rotate-mark">G<span>///</span></div><div class="rotate-phone"><div class="rotate-screen"></div></div><div class="rotate-kicker">MODALITÀ GARA</div><h2>Gira il telefono.<br><em>Accendi la sfida.</em></h2><p>GRIDLINE GP è progettato per giocare in orizzontale. Ruota lo schermo per entrare in pista.</p><span class="rotate-bottom">↻ &nbsp; LANDSCAPE ONLY</span></div>
-<script type="module" src="/game.js?v=gp5-1"></script>
+<script type="module" src="/game.js?v=gp6-1"></script>
 </body>
 </html>

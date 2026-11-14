@@ -17,3 +17,27 @@
   .site-header,.intro,.under-stage,.site-footer{display:none}.app{padding:0;max-width:none}.stage{width:100vw;height:100dvh;min-height:0;border:0;border-radius:0}.panel{padding:15px 23px}.entry-panel .panel-mark{display:none}.panel h2{font-size:40px;margin:8px 0}.panel p{margin-bottom:9px}.panel label{margin:8px 0 4px}.panel input{height:37px}.primary-button{min-height:40px;margin-top:13px}.panel-foot{margin-top:10px}.steer-track{width:160px;height:84px}.steer-thumb{width:66px;height:66px}.pedals button{height:66px;width:93px}.hud-main .timer{padding-right:9px}.hud{padding-top:6px}.race-standings{top:52px}.countdown span{font-size:115px}
 }
 @media(pointer:coarse) and (orientation:landscape) and (max-height:340px){.steer-track{height:68px;width:142px}.steer-thumb{width:60px;height:60px}.pedals button{height:53px}.control-caption{display:none}.race-standings .racer:nth-child(n+4){display:none}}
+
+/* v6: audio e record permanenti, senza coprire la pista in landscape. */
+.sound-toggle{pointer-events:auto;border:1px solid #d5e0c37a;border-radius:5px;color:var(--acid);background:#102228dc;width:36px;height:34px;font-size:20px;cursor:pointer;display:grid;place-items:center;flex:none}
+.sound-toggle[aria-pressed="false"]{color:#8a9996;border-color:#5b6967}
+.records-link{width:100%;margin-top:12px;min-height:34px;background:#193034;border:1px solid #577674;border-radius:5px;color:var(--acid);font:900 15px var(--display);letter-spacing:1.1px;cursor:pointer}
+.records-panel{width:min(480px,100%)}
+.records-panel h2{font-size:43px}
+.records-panel p{margin-bottom:12px}
+.record-list{max-height:min(190px,34dvh);overflow-y:auto;scrollbar-width:thin;display:flex;flex-direction:column;gap:4px}
+.record-row{display:grid;grid-template-columns:36px minmax(0,1fr) 84px;align-items:center;gap:5px;padding:7px 9px;background:#1d3436;border:1px solid #45625f;border-radius:4px;font-size:12px}
+.record-row:nth-child(-n+3){border-color:#d6e77b8f}
+.record-rank{font:900 17px var(--display);color:var(--acid)}
+.record-name{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.record-row strong{text-align:right;color:#ebf57c;font:900 19px var(--display)}
+.record-actions{display:flex;gap:8px;margin:12px 0}
+.record-actions button{flex:1;min-height:38px;background:#263e41;border:1px solid #729290;color:#eef2e9;border-radius:4px;font:900 13px var(--display);letter-spacing:1px}
+.record-actions button:last-child{background:var(--acid);color:#15211a;border-color:var(--acid)}
+.record-note{color:#7e9996;font:700 10px/1.3 var(--font)}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:460px){
+  .sound-toggle{width:30px;height:29px;font-size:16px}
+  .records-panel{padding:12px 18px}.records-panel h2{font-size:34px;margin:6px 0}.records-panel p{font-size:10px;margin-bottom:8px}
+  .record-list{max-height:calc(100dvh - 204px)}.record-row{padding:4px 9px;font-size:11px}.record-row strong{font-size:16px}
+  .record-actions{margin:7px 0}.record-actions button{min-height:32px}.record-note{font-size:9px}
+}

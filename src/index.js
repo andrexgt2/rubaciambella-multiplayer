@@ -1,5 +1,9 @@
 import {LIMIT,COLORS,makeRoom,loadRoom,saveRoom,spawn,startMatch,tick,snapshot,safeInput} from './engine.js';
 const ROOM_RE=/^[A-HJ-NP-Z2-9]{6}$/;
+const RECORDS_ID='gridline:global-laps:creste-v1';
+const RECORDS_KEY='best-laps-creste-v1';
+const MAX_RECORDS=20;
+const MIN_LAP_MS=12000; // Protezione base contro tempi impossibili, non anti-cheat completo.
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
 
 // Un Durable Object per stanza: simulazione, collisioni, checkpoint e giri sono autoritativi.
@@ -7,6 +11,7 @@ export class GameRoom {
   constructor(ctx,env){
     this.ctx=ctx;this.env=env;this.room=makeRoom('');this.sockets=new Map();
     this.timer=null;this.lastTick=Date.now();this.frames=0;this.lastSaved=0;
+    this.recordsQueue=Promise.resolve();
     ctx.blockConcurrencyWhile(async()=>{
       const persisted=await ctx.storage.get('room');
       this.room=loadRoom(persisted,'');
@@ -21,6 +26,35 @@ export class GameRoom {
     });
   }
   async fetch(request){
+    // La rotta /internal/records non è esposta direttamente: il Worker pubblico
+    // inoltra solo GET. Le scritture arrivano da GameRoom dopo un giro reale.
+    const path=new URL(request.url).pathname;
+    if(path==='/internal/records'){
+      if(request.method==='GET')return json({track:'creste-v1',records:await this.ctx.storage.get(RECORDS_KEY)||[]});
+      if(request.method==='POST'){
+        let data;try{data=await request.json();}catch(_){return json({error:'JSON non valido'},400);}
+        const name=typeof data?.name==='string'?data.name.trim().replace(/[\x00-\x1F\x7F]/g,'').slice(0,16):'';
+        const ms=data?.ms;
+        if(!name||!Number.isInteger(ms)||ms<MIN_LAP_MS||ms>360000)return json({error:'Giro non valido'},400);
+        // Serializza gli aggiornamenti al medesimo Durable Object: niente race su due stanze.
+        const job=this.recordsQueue.catch(()=>{}).then(async()=>{
+          let records=await this.ctx.storage.get(RECORDS_KEY)||[];
+          if(!Array.isArray(records))records=[];
+          const key=name.toLocaleLowerCase('it');
+          const previous=records.find(r=>r.key===key);
+          if(previous&&previous.ms<=ms)return {changed:false};
+          records=records.filter(r=>r.key!==key);
+          records.push({key,name,ms,at:Date.now()});
+          records.sort((a,b)=>a.ms-b.ms||a.at-b.at);
+          records=records.slice(0,MAX_RECORDS);
+          await this.ctx.storage.put(RECORDS_KEY,records);
+          return {changed:true};
+        });
+        this.recordsQueue=job;
+        return json(await job);
+      }
+      return new Response('Metodo non consentito',{status:405});
+    }
     if(request.headers.get('Upgrade')?.toLowerCase()!=='websocket')return new Response('WebSocket richiesto',{status:426});
     const origin=request.headers.get('Origin'),url=new URL(request.url);
     const expected=url.origin.replace(/^ws:/,'http:').replace(/^wss:/,'https:');
@@ -34,6 +68,13 @@ export class GameRoom {
     for(const ws of this.sockets.values())try{ws.send(msg);}catch(_){}
   }
   persist(){this.ctx.waitUntil(this.ctx.storage.put('room',saveRoom(this.room)));}
+  publishRecord(name,ms){
+    if(!this.env.GAME_ROOMS)return Promise.resolve();
+    const board=this.env.GAME_ROOMS.get(this.env.GAME_ROOMS.idFromName(RECORDS_ID));
+    return board.fetch(new Request('https://internal/internal/records',{
+      method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,ms})
+    })).catch(()=>{}); // Un errore nella classifica non deve bloccare la partita.
+  }
   ensureLoop(){if(this.timer||!this.room.players.size)return;
     this.lastTick=Date.now();this.timer=setInterval(()=>this.step(),50);
   }
@@ -42,6 +83,18 @@ export class GameRoom {
     if(!this.room.players.size){this.stopLoop();return;}
     const now=Date.now(),dt=Math.min(.07,Math.max(0,(now-this.lastTick)/1000));this.lastTick=now;
     const before=this.room.phase;tick(this.room,now,dt);
+    // Invia SOLO i nuovi giri completi con checkpoint convalidati dal server.
+    // Il marcatore è salvato nello stato stanza, quindi un restart non duplica gli invii.
+    for(const p of this.room.players.values()){
+      if(p.spectator)continue;
+      const recorded=p.recordedLaps||0;
+      if(p.laps>recorded){
+        p.recordedLaps=p.laps;
+        if(Number.isFinite(p.lastLap)&&p.lastLap>=MIN_LAP_MS&&p.lastLap<=360000)
+          this.ctx.waitUntil(this.publishRecord(p.name,Math.round(p.lastLap)));
+        this.persist();
+      }
+    }
     let expired=false;for(const [id,p] of this.room.players){
       if(p.disconnectedAt&&now-p.disconnectedAt>12000){this.room.players.delete(id);expired=true;}
     }
@@ -103,7 +156,12 @@ export class GameRoom {
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/api/health')return json({ok:true,service:'GRIDLINE GP',version:5});
+    if(url.pathname==='/api/health')return json({ok:true,service:'GRIDLINE GP',version:6});
+    if(url.pathname==='/api/leaderboard'){
+      if(request.method!=='GET')return json({error:'Solo lettura'},405);
+      const board=env.GAME_ROOMS.get(env.GAME_ROOMS.idFromName(RECORDS_ID));
+      return board.fetch(new Request('https://internal/internal/records'));
+    }
     const match=/^\/api\/room\/([A-Z0-9]{6})$/.exec(url.pathname);
     if(match){
       if(!ROOM_RE.test(match[1]))return json({error:'Codice stanza non valido'},400);

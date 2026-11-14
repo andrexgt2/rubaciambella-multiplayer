@@ -1,8 +1,9 @@
 import {WORLD,ROAD_WIDTH,LAP_COUNT,CENTERLINE,TRACK_LENGTH,pointAt,closestTrack} from './track.js';
+import {makeRaceAudio} from './audio.js';
 const $=id=>document.getElementById(id),clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
 const canvas=$('trackCanvas'),ctx=canvas.getContext('2d',{alpha:false});
 const state={socket:null,room:null,playerId:null,server:null,connected:false,version:0,lastPacket:0,
-  keys:{gas:false,brake:false,steer:0},name:'',oldPhase:'',lastLap:0,toastTimer:0};
+  keys:{gas:false,brake:false,steer:0},name:'',oldPhase:'',lastLap:0,lastHit:0,lastCountdown:0,toastTimer:0,recordsOpen:false};
 const visual=new Map();let camera={x:WORLD.width/2,y:WORLD.height/2,zoom:1},lastFrame=0;
 const roomFromUrl=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
 $('codeInput').value=roomFromUrl;
@@ -15,6 +16,52 @@ const clock=t=>{const v=Math.max(0,Math.floor(t)),m=Math.floor(v/60);return Stri
 const lapTime=ms=>ms?`${(ms/1000).toFixed(2)}s`:'—';
 function toast(message){const el=$('toast');el.textContent=message;el.classList.remove('hidden');clearTimeout(state.toastTimer);state.toastTimer=setTimeout(()=>el.classList.add('hidden'),1800);}
 function send(type,fields={}){if(state.socket?.readyState===WebSocket.OPEN)state.socket.send(JSON.stringify({type,...fields}));}
+const sound=makeRaceAudio();
+const unlockAudio=()=>sound.unlock();
+const beep=(freq,length)=>sound.tone(freq,length);
+$('soundToggle').textContent=sound.isOn()?'♫':'♫̸';
+$('soundToggle').setAttribute('aria-pressed',String(sound.isOn()));
+$('soundToggle').addEventListener('click',()=>{
+  const on=sound.toggle();$('soundToggle').textContent=on?'♫':'♫̸';
+  $('soundToggle').setAttribute('aria-pressed',String(on));
+  $('soundToggle').setAttribute('aria-label',on?'Disattiva audio':'Attiva audio');
+});
+// Accesso ai record anche prima di creare una stanza. Nessuna credenziale richiesta.
+let cachedRecords=[];
+function renderRecords(message=''){
+  const list=$('recordList');list.replaceChildren();
+  if(message){const p=document.createElement('p');p.textContent=message;list.append(p);return;}
+  if(!cachedRecords.length){const p=document.createElement('p');p.textContent='Ancora nessun giro registrato. Il primo record può essere il tuo!';list.append(p);return;}
+  for(const [i,r] of cachedRecords.entries()){
+    const row=document.createElement('div');row.className='record-row';
+    const pos=document.createElement('span');pos.className='record-rank';pos.textContent='#'+(i+1);
+    const name=document.createElement('span');name.className='record-name';name.textContent=r.name;
+    const time=document.createElement('strong');time.textContent=lapTime(r.ms);
+    row.append(pos,name,time);list.append(row);
+  }
+}
+async function loadRecords(){
+  try{
+    const response=await fetch('/api/leaderboard',{cache:'no-store'});
+    if(!response.ok)throw new Error('HTTP '+response.status);
+    const json=await response.json();
+    cachedRecords=Array.isArray(json.records)?json.records.slice(0,20):[];
+    renderRecords();
+  }catch(_){renderRecords('Classifica non disponibile: verifica la connessione e riprova.');}
+}
+function openRecords(){
+  if(['racing','countdown'].includes(state.server?.phase))return;
+  state.recordsOpen=true;$('overlay').classList.remove('hidden');
+  for(const id of ['entryPanel','lobbyPanel','resultsPanel'])$(id).classList.add('hidden');
+  $('recordsPanel').classList.remove('hidden');loadRecords();
+}
+function closeRecords(){state.recordsOpen=false;$('recordsPanel').classList.add('hidden');
+  if(state.server)updateUI();else $('entryPanel').classList.remove('hidden');}
+for(const button of document.querySelectorAll('[data-open-records]'))button.addEventListener('click',()=>{unlockAudio();openRecords();});
+$('closeRecords').addEventListener('click',closeRecords);
+$('refreshRecords').addEventListener('click',loadRecords);
+loadRecords();
+
 function connect(name,code){
   const v=++state.version;state.name=name;state.room=code||newCode();state.playerId=null;state.connected=false;state.server=null;
   if(state.socket){state.socket.onclose=null;state.socket.close();}
@@ -73,18 +120,22 @@ function updateUI(){
   const s=state.server;if(!s)return;
   const me=getMe();
   const active=['racing','countdown'].includes(s.phase);
+  if(active)state.recordsOpen=false;
   const currentPhase=me?.spectator&&active?'spectator':s.phase;
   document.body.classList.toggle('game-active',active);
   $('hud').classList.toggle('hidden',!active);
-  $('overlay').classList.toggle('hidden',active&&!me?.spectator);
+  $('overlay').classList.toggle('hidden',active&&!me?.spectator&&!state.recordsOpen);
   $('entryPanel').classList.add('hidden');
-  $('lobbyPanel').classList.toggle('hidden',!(s.phase==='lobby'||currentPhase==='spectator'));
-  $('resultsPanel').classList.toggle('hidden',s.phase!=='results');
+  $('recordsPanel').classList.toggle('hidden',!state.recordsOpen);
+  $('lobbyPanel').classList.toggle('hidden',state.recordsOpen||!(s.phase==='lobby'||currentPhase==='spectator'));
+  $('resultsPanel').classList.toggle('hidden',state.recordsOpen||s.phase!=='results');
   $('countdown').classList.toggle('hidden',s.phase!=='countdown');
   $('countdown').classList.toggle('go',false);
   if(s.phase==='countdown')$('countdown').querySelector('span').textContent=s.countdown||'VIA';
-  if(s.phase!=='countdown'&&state.oldPhase==='countdown'){toast('VIA!');beep(740,.15);}
-  if(state.oldPhase!=='results'&&s.phase==='results'){beep(520,.28);}
+  if(s.phase==='countdown'&&s.countdown&&state.lastCountdown!==s.countdown){state.lastCountdown=s.countdown;beep(410+s.countdown*90,.09);}
+  if(s.phase!=='countdown'&&state.oldPhase==='countdown'){toast('VIA!');beep(900,.20);}
+  if(state.oldPhase!=='results'&&s.phase==='results'){sound.finish();setTimeout(loadRecords,1300);}
+  if(state.oldPhase==='results'&&s.phase==='countdown'){state.lastLap=0;state.lastHit=0;state.lastCountdown=0;}
   state.oldPhase=s.phase;
   $('inviteCode').textContent=s.code;$('lobbyCount').textContent=s.players.length+' / 8';
   $('hudRoom').textContent=s.code;
@@ -102,7 +153,9 @@ function updateUI(){
     $('positionValue').innerHTML=String(me.rank??'—')+'<span> / '+s.players.filter(p=>!p.spectator).length+'</span>';
     $('lapValue').innerHTML=String(Math.min(me.laps+1,LAP_COUNT))+'<span> / '+LAP_COUNT+'</span>';
     $('speedValue').textContent=String(Math.round(Math.max(0,me.speed)*.59)).padStart(3,'0');
-    if(me.laps&&me.lastLap!==state.lastLap){state.lastLap=me.lastLap;toast('GIRO '+me.laps+' · '+lapTime(me.lastLap));beep(960,.13);}
+    if(me.laps&&me.lastLap!==state.lastLap){state.lastLap=me.lastLap;toast('GIRO '+me.laps+' · '+lapTime(me.lastLap));beep(960,.13);setTimeout(loadRecords,1300);}
+    if(me.hits>state.lastHit){state.lastHit=me.hits;sound.hit();}
+    else if(me.hits<state.lastHit)state.lastHit=me.hits;
   }
   $('timerValue').textContent=clock(s.elapsed);
   const sorted=[...s.players].filter(p=>!p.spectator).sort((a,b)=>(a.rank||99)-(b.rank||99));
@@ -173,12 +226,6 @@ function syncKeys(){state.keys.gas=held.has('KeyW')||held.has('ArrowUp');state.k
   state.keys.steer=(held.has('KeyD')||held.has('ArrowRight')?1:0)-(held.has('KeyA')||held.has('ArrowLeft')?1:0);
 }
 setInterval(()=>{if(state.connected&&state.playerId)send('input',{keys:state.keys});},50);
-// Audio feedback leggeri, senza risorse esterne. Sono attivi solo dopo un gesto dell'utente.
-let audio=null;function unlockAudio(){try{audio??=new (window.AudioContext||window.webkitAudioContext)();audio.resume?.().catch(()=>{});}catch(_){}}
-function beep(freq=740,length=.12){if(!audio||audio.state!=='running')return;try{const o=audio.createOscillator(),g=audio.createGain();
-  o.type='triangle';o.frequency.value=freq;g.gain.setValueAtTime(.065,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+length);
-  o.connect(g);g.connect(audio.destination);o.start();o.stop(audio.currentTime+length);
-}catch(_){}}
 // Sfondo del circuito pre-renderizzato (una sola volta) per preservare FPS su telefoni.
 const surface=document.createElement('canvas');surface.width=WORLD.width;surface.height=WORLD.height;
 const sc=surface.getContext('2d',{alpha:false});
@@ -287,6 +334,7 @@ function draw(now){
   const d=Math.min(.05,Math.max(.005,(now-lastFrame)/1000||.016));lastFrame=now;
   const {w,h,dpr}=fitCanvas();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
   const server=state.server,me=getMe();
+  sound.update(me?.speed||0,state.keys.gas,server?.phase==='racing'&&!me?.spectator,!!me?.offroad);
   const racing=server&&['racing','countdown'].includes(server.phase)&&me&&!me.spectator;
   let targetX=WORLD.width/2,targetY=WORLD.height/2,targetZoom=Math.min(w/WORLD.width*.92,h/WORLD.height*.92);
   if(racing){

@@ -124,8 +124,49 @@ test('limite 8 piloti, nuova versione storage, API health e assets',async()=>{
   assert.equal(loadRoom(saveRoom(r.room),'ABC234').players.size,8);
   const env={ASSETS:{fetch:async()=>new Response('STATIC')}};
   const health=await worker.fetch(new Request('https://game.test/api/health'),env);
-  assert.equal((await health.json()).version,5);
+  assert.equal((await health.json()).version,6);
   const page=await worker.fetch(new Request('https://game.test/'),env);assert.equal(await page.text(),'STATIC');
   const err=await worker.fetch(new Request('https://game.test/api/room/ABC123'),env);assert.equal(err.status,400);
   r.stopLoop();await ctx.flush();
+});
+
+
+test('record server-side: giri validi, ordinamento e persistenza globale tra stanze e restart',async()=>{
+  const boardStorage=new Map(),boardCtx=new FakeCtx(boardStorage),board=new GameRoom(boardCtx,{});
+  await boardCtx.ready;
+  const namespace={idFromName:name=>name,get:()=>({fetch:req=>board.fetch(req)})};
+  const env={GAME_ROOMS:namespace,ASSETS:{fetch:async()=>new Response('STATIC')}};
+  const boardUrl='https://internal/internal/records';
+  const report=(name,ms)=>board.fetch(new Request(boardUrl,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,ms})}));
+  assert.equal((await report('GiroFalso',3000)).status,400,'scarta tempi impossibili');
+  const roomCtx=new FakeCtx(),race=new GameRoom(roomCtx,env);await roomCtx.ready;
+  const ws=new FakeSocket();message(race,ws,{type:'join',name:'Luna'});race.room.code='ABC234';
+  const p=race.room.players.get(ws.attachment.id);
+  p.laps=1;p.lastLap=67000;p.recordedLaps=0;p.finishedAt=Date.now();race.room.phase='racing';
+  race.room.startedAt=Date.now()-80000;race.room.raceEnds=Date.now()+50000;
+  race.step();race.stopLoop();await roomCtx.flush();
+  let result=await worker.fetch(new Request('https://game.test/api/leaderboard'),env);
+  assert.equal(result.status,200);
+  assert.deepEqual((await result.json()).records.map(r=>[r.name,r.ms]),[['Luna',67000]]);
+  await report('Luna',69000);await report('Nico',62000);await report('Luna',61000);
+  result=await worker.fetch(new Request('https://game.test/api/leaderboard'),env);
+  assert.deepEqual((await result.json()).records.map(r=>[r.name,r.ms]),[['Luna',61000],['Nico',62000]]);
+  assert.equal((await worker.fetch(new Request('https://game.test/api/leaderboard',{method:'POST'}),env)).status,405);
+  const rebootCtx=new FakeCtx(boardStorage),reboot=new GameRoom(rebootCtx,{});await rebootCtx.ready;
+  const data=await reboot.fetch(new Request(boardUrl));
+  assert.deepEqual((await data.json()).records.map(r=>r.ms),[61000,62000]);
+  race.stopLoop();reboot.stopLoop();board.stopLoop();
+});
+
+test('classifica: massimo 20 piloti, nessuna collisione di nomi con maiuscole e parità migliori tempi',async()=>{
+  const ctx=new FakeCtx(),board=new GameRoom(ctx,{});await ctx.ready;
+  const post=(name,ms)=>board.fetch(new Request('https://internal/internal/records',{
+    method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,ms})
+  }));
+  await Promise.all(Array.from({length:26},(_,i)=>post('Pilot'+i,40000+i*1000)));
+  let records=(await (await board.fetch(new Request('https://internal/internal/records'))).json()).records;
+  assert.equal(records.length,20);assert.equal(records[0].name,'Pilot0');assert.equal(records.at(-1).name,'Pilot19');
+  await post('PILOT0',39000);records=(await (await board.fetch(new Request('https://internal/internal/records'))).json()).records;
+  assert.equal(records.length,20);assert.equal(records[0].ms,39000);
+  assert.equal(records.filter(r=>r.key==='pilot0').length,1);
 });
