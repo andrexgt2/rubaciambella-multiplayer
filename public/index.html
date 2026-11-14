@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e1023">
+  <meta name="description" content="Rubaciambella: il party game di macchinine da giocare con gli amici in multiplayer.">
+  <title>RUBACIAMBELLA · Microauto, maxi caos</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div class="brand"><div class="brand-logo" aria-hidden="true">◎</div><div><div class="brand-name">RUBA<span>CIAMBELLA</span><span class="brand-dot">.</span></div><div class="brand-subtitle">MICROAUTO, MAXI CAOS</div></div></div>
+    <div class="header-status"><span class="online-dot"></span><span id="connectionLabel">Pronto a partire</span><span class="header-divider"></span><span>PARTY RACER · 2–8 GIOCATORI</span></div>
+  </header>
+  <main>
+    <section class="hero"><div><div class="eyebrow">IL GIOCO PERFETTO PER ROVINARE LE AMICIZIE <span>✳</span></div><h1>Ruba la ciambella.<br><em>Non fartela rubare.</em></h1><p>Mini macchine, clacson devastanti e una sola ciambella. Vince chi se la tiene più a lungo. Sì, è tutto molto serio.</p></div><div class="hero-doodle" aria-hidden="true"><span>🍩</span><small>100% CAOS</small></div></section>
+    <div class="game-layout">
+      <section class="arena-card" aria-label="Arena di gioco">
+        <div class="arena-topbar"><div class="live-label"><span class="live-pulse"></span><span id="phaseLabel">PREPARATI AL CAOS</span></div><div class="time-box"><span>⏱</span> <strong id="timeLabel">01:30</strong></div><div class="room-chip">STANZA <strong id="roomLabel">—</strong></div></div>
+        <div class="canvas-wrap">
+          <canvas id="game" width="1200" height="740" aria-label="Gioco di macchinine in vista dall'alto"></canvas>
+          <div class="overlay" id="overlay">
+            <div class="modal" id="joinPanel">
+              <div class="modal-icon">🍩</div><div class="modal-eyebrow">PRONTO PER IL DELIRIO?</div>
+              <h2>Accendi il motore.</h2><p>Entra in una stanza con gli amici o creane una nuova. Basta condividere un link.</p>
+              <form id="joinForm"><label for="nameInput">IL TUO NOME DA PILOTA</label><input id="nameInput" maxlength="16" placeholder="Es. TurboPatata" autocomplete="nickname" required>
+              <label for="codeInput">CODICE STANZA <span>(OPZIONALE)</span></label><input id="codeInput" maxlength="6" placeholder="Vuoto = nuova stanza" autocomplete="off" spellcheck="false">
+              <button class="primary-button" type="submit" id="joinBtn">ENTRA IN PISTA <span>→</span></button></form>
+              <div id="joinError" class="form-error" role="alert"></div><div class="modal-foot">Nessun account · Nessun download · Zero scuse</div>
+            </div>
+            <div class="modal hidden" id="lobbyPanel">
+              <div class="modal-icon">🏁</div><div class="modal-eyebrow">IL BOX DEI PILOTI</div><h2>Raduna la banda.</h2><p>Condividi il link e fai entrare tutti. Puoi anche provare il gioco da solo.</p>
+              <div class="invite-box"><span id="inviteCode">------</span><button type="button" id="copyBtn">COPIA LINK <span>↗</span></button></div>
+              <div class="lobby-label">PILOTI NELLA STANZA <strong id="lobbyCount">1/8</strong></div><div id="lobbyPlayers" class="lobby-players"></div>
+              <button class="primary-button" type="button" id="startBtn">SI PARTE! <span>→</span></button><div id="hostHint" class="host-hint"></div>
+            </div>
+            <div class="modal hidden" id="resultsPanel"><div class="modal-icon">🏆</div><div class="modal-eyebrow">FINE DEL DELIRIO</div><h2 id="winnerTitle">Che gara!</h2><p id="winnerSubtitle">I motori si spengono, gli sfottò no.</p><div id="podium" class="podium"></div><button class="primary-button" type="button" id="againBtn">RIVINCITA! <span>↻</span></button><div id="againHint" class="host-hint"></div></div>
+          </div>
+          <div id="countdown" class="countdown hidden" aria-live="polite">3</div>
+          <div id="frenzy" class="frenzy hidden">🔥 ULTIMI 20 SECONDI · PUNTI X2 🔥</div>
+        </div>
+        <div class="touch-controls" id="touchControls"><div class="pad"><div></div><button type="button" data-control="up" aria-label="Accelera">▲</button><div></div><button type="button" data-control="left" aria-label="Sterza a sinistra">◀</button><button type="button" data-control="down" aria-label="Retromarcia">▼</button><button type="button" data-control="right" aria-label="Sterza a destra">▶</button></div><div class="action-pad"><button type="button" data-control="boost" class="boost-btn">⚡<small>TURBO</small></button><button type="button" data-control="blast" class="blast-btn">📣<small>BIP!</small></button></div></div>
+        <div class="arena-bottom"><span><span class="circle-key">W</span><span class="circle-key">A</span><span class="circle-key">S</span><span class="circle-key">D</span> GUIDA</span><span><span class="rect-key">SHIFT</span> TURBO</span><span><span class="rect-key">SPAZIO</span> CLACSON</span><span class="mobile-tip">SU TELEFONO USA I COMANDI TOUCH</span></div>
+      </section>
+      <aside class="sidebar">
+        <section class="panel scoreboard"><div class="panel-header"><div><span class="mini-eyebrow">LA CLASSIFICA</span><h3>Il garage dei fenomeni</h3></div><span class="panel-symbol">★</span></div><div id="scoreboard" class="score-list"><div class="empty-score">Entra in pista per vedere chi comanda.</div></div></section>
+        <section class="panel ability-panel"><div class="panel-header"><div><span class="mini-eyebrow">IL TUO ARSENALE</span><h3>Armi improprie</h3></div><span class="panel-symbol">⚡</span></div><div class="ability-row"><div class="ability-icon yellow">⚡</div><div class="ability-info"><strong>Turbo</strong><span>Per fughe poco dignitose</span><div class="ability-track"><div id="boostFill"></div></div></div><span id="boostState" class="ability-state">PRONTO</span></div><div class="ability-row"><div class="ability-icon pink">📣</div><div class="ability-info"><strong>Clacson d'urto</strong><span>Spedisci gli amici altrove</span><div class="ability-track"><div id="blastFill"></div></div></div><span id="blastState" class="ability-state">PRONTO</span></div></section>
+        <section class="howto"><div class="howto-heading">🍩 &nbsp;LE REGOLE DEL CAOS</div><p><strong>1.</strong> Tocca la ciambella per prenderla.</p><p><strong>2.</strong> Guadagna punti mentre la porti.</p><p><strong>3.</strong> Tampona il portatore o usa il clacson per rubarla.</p><p><strong>4.</strong> Raccogli le stelline per punti extra. Negli ultimi 20 secondi la ciambella vale il doppio!</p></section>
+      </aside>
+    </div>
+    <footer class="footer"><span>FATTO PER LE SERATE CON GLI AMICI, NON PER I PROFESSIONISTI.</span><span>🍩 UN'IDEA ASSURDAMENTE SERIA</span></footer>
+  </main>
+</div>
+<script src="/game.js"></script>
+</body>
+</html>

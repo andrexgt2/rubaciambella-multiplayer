@@ -1,0 +1,17 @@
+{
+  "name": "rubaciambella-cloudflare",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "RUBACIAMBELLA: multiplayer WebSocket + Cloudflare Durable Objects",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test test/*.test.js",
+    "check": "node --check src/engine.js && node --check src/index.js && node --check public/game.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.45.0"
+  },
+  "engines": {"node": ">=20"}
+}
