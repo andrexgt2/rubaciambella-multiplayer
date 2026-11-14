@@ -47,6 +47,11 @@ Durante la pressione dei controlli sono disattivati lo scroll e la selezione del
 (incluso il menu di selezione su Safari iOS). Su computer rimangono disponibili
 WASD o frecce, Shift e barra spaziatrice.
 
-## Aggiornamento automatico Cloudflare
+## Comandi touchscreen v3
 
-Il 14 novembre 2026 è stato richiesto un nuovo deploy dal branch `main` per pubblicare la versione con joystick touch. Questa modifica alla documentazione serve ad attivare un nuovo evento push verso l'integrazione GitHub/Cloudflare; l'esito del deploy va controllato nella dashboard Cloudflare.
+- Pollice sinistro: **sterzo orizzontale analogico** (niente accelerazione tramite joystick).
+- Pollice destro: tieni premuto **GAS** per accelerare; **FRENO** per rallentare e poi per la retromarcia.
+- **TURBO** e **BIP!** restano utilizzabili durante la guida.
+- Il clacson usa Web Audio, generato dal gioco al tocco, senza servizi esterni. Il volume dipende dalle impostazioni del dispositivo/browser.
+- Auto con muso a freccia bianca, fari chiari e retro rosso; la propria auto ha anche una freccia luminosa davanti.
+- Sterzata più delicata e partenze lontane dalle macchie d'olio.

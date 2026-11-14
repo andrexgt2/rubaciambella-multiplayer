@@ -8,7 +8,7 @@ const OIL=[{x:595,y:168,r:49},{x:605,y:572,r:49},{x:165,y:367,r:37},{x:1035,y:36
 const PADS=[{x:480,y:365,r:36},{x:720,y:365,r:36}];
 let socket=null,playerId=null,roomCode=null,gameState=null,lastNow=Date.now(),connected=false;
 let retryTimer=null,connectVersion=0;
-const visuals=new Map(),keys={up:false,down:false,left:false,right:false,boost:false,blast:false};
+const visuals=new Map(),keys={up:false,down:false,left:false,right:false,boost:false,blast:false,steer:null};
 const params=new URLSearchParams(location.search),initialRoom=(params.get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
 if(initialRoom) $('codeInput').value=initialRoom;
 try {$('nameInput').value=localStorage.getItem('rb_name')||'';}catch(_){}
@@ -61,7 +61,7 @@ function connect(data){
         try{localStorage.setItem('rb_name',data.name);}catch(_){}
       }else if(packet.type==='state'){
         if(!joined)return;
-        gameState=packet.state;lastNow=Date.now();updateUI();
+        const oldState=gameState;gameState=packet.state;lastNow=Date.now();hearNearbyHorns(oldState,gameState);updateUI();
       }else if(packet.type==='join_error'||packet.type==='error'){
         setError(packet.message||'Impossibile entrare nella stanza.');
         $('joinBtn').disabled=false;$('joinBtn').textContent='ENTRA IN PISTA →';
@@ -99,38 +99,78 @@ $('copyBtn').addEventListener('click',async()=>{
   catch(_){window.prompt('Copia questo link e invialo agli amici:',link);}
   setTimeout(()=>$('copyBtn').textContent='COPIA LINK ↗',1800);
 });
+// Clacson sintetizzato con Web Audio: nessun file audio esterno da scaricare.
+// Su iOS il contesto va sbloccato da un gesto reale (es. tap su BIP!).
+let soundContext=null;
+function audioContext(){
+  const Audio=window.AudioContext||window.webkitAudioContext;
+  if(!Audio)return null;
+  if(!soundContext){try{soundContext=new Audio();}catch(_){return null;}}
+  if(soundContext.state==='suspended')soundContext.resume().catch(()=>{});
+  return soundContext;
+}
+function honk(volume=1){
+  const a=audioContext();if(!a)return;
+  const t=a.currentTime;
+  for(const [frequency,level] of [[310,.085],[392,.055]]){
+    const osc=a.createOscillator(),gain=a.createGain();
+    osc.type='sawtooth';
+    osc.frequency.setValueAtTime(frequency,t);
+    osc.frequency.linearRampToValueAtTime(frequency*.93,t+.28);
+    gain.gain.setValueAtTime(0,t);
+    gain.gain.linearRampToValueAtTime(level*volume,t+.018);
+    gain.gain.setValueAtTime(level*volume,t+.13);
+    gain.gain.linearRampToValueAtTime(0,t+.18);
+    gain.gain.linearRampToValueAtTime(level*volume*.78,t+.205);
+    gain.gain.exponentialRampToValueAtTime(.0001,t+.37);
+    osc.connect(gain).connect(a.destination);
+    osc.start(t);osc.stop(t+.39);
+  }
+}
+// Il clacson avversario si sente solo se avviene vicino alla nostra macchina.
+function hearNearbyHorns(previous,next){
+  if(!previous||!playerId||next.phase!=='playing')return;
+  const me=next.players.find(p=>p.id===playerId);if(!me)return;
+  const before=new Map(previous.players.map(p=>[p.id,p.blastAt]));
+  for(const p of next.players){
+    if(p.id===playerId||!before.has(p.id)||p.blastAt<=0||p.blastAt===before.get(p.id))continue;
+    if(Math.hypot(p.x-me.x,p.y-me.y)<450)honk(.47);
+  }
+}
 const padIds=['up','down','left','right','boost','blast'];
 const keyName={ArrowUp:'up',KeyW:'up',ArrowDown:'down',KeyS:'down',ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ShiftLeft:'boost',ShiftRight:'boost',Space:'blast'};
 document.addEventListener('keydown',e=>{
   if(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)return;
   const name=keyName[e.code];
-  if(name){e.preventDefault();keys[name]=true;}
+  if(name){
+    e.preventDefault();
+    if(name==='blast'&&!keys.blast&&gameState?.phase==='playing'){
+      const me=getMe();if(me&&gameState.serverNow>=me.blastReadyAt)honk();
+    }
+    keys[name]=true;
+  }
 });
 document.addEventListener('keyup',e=>{const name=keyName[e.code];if(name){e.preventDefault();keys[name]=false;}});
-// Il joystick virtuale usa Pointer Events: un dito guida, l'altro attiva turbo o clacson.
-// Su Safari iOS impediamo anche la selezione di testo, il menu di pressione lunga e lo scroll.
+// Joystick orizzontale a sterzo proporzionale: il piede destro accelera o frena.
+// Su Safari iOS impediamo selezione di testo, menu di pressione lunga e scroll.
 const controls=$('touchControls'),stick=$('joystick'),knob=$('joystickKnob');
 const pointers=new Map();
 let stickPointer=null;
 function clearStick(){
   stickPointer=null;
-  keys.up=false;keys.down=false;keys.left=false;keys.right=false;
+  keys.steer=null;
   knob.style.transform='translate(0px, 0px)';
   stick.classList.remove('engaged');
 }
 function moveStick(e){
   const rect=stick.getBoundingClientRect();
-  const radius=Math.min(rect.width,rect.height)*.31;
-  const x=e.clientX-(rect.left+rect.width/2),y=e.clientY-(rect.top+rect.height/2);
-  const length=Math.hypot(x,y),ratio=length>radius?radius/length:1;
-  const nx=x*ratio/radius,ny=y*ratio/radius;
-  knob.style.transform=`translate(${(nx*radius).toFixed(1)}px, ${(ny*radius).toFixed(1)}px)`;
-  const threshold=.24;
-  keys.left=nx< -threshold;
-  keys.right=nx>threshold;
-  keys.down=ny>.38;
-  // In diagonale sterzi e acceleri con lo stesso pollice.
-  keys.up=ny<-.23||(Math.abs(nx)>.40&&ny<=.24);
+  const radius=rect.width*.30;
+  const x=e.clientX-(rect.left+rect.width/2);
+  const nx=Math.max(-1,Math.min(1,x/radius));
+  // Piccola zona morta al centro, sterzo progressivo e non tutto-o-niente.
+  const deadzone=.12;
+  keys.steer=Math.abs(nx)<deadzone?0:Math.sign(nx)*(Math.abs(nx)-deadzone)/(1-deadzone);
+  knob.style.transform=`translate(${(nx*radius).toFixed(1)}px, 0px)`;
 }
 stick.addEventListener('pointerdown',e=>{
   if(stickPointer!==null)return;
@@ -156,6 +196,10 @@ for(const button of document.querySelectorAll('[data-control]')){
     try{button.setPointerCapture(e.pointerId);}catch(_){}
     pointers.set(e.pointerId,{control,button});keys[control]=true;
     button.classList.add('pressed');
+    if(control==='blast'&&gameState?.phase==='playing'){
+      const me=getMe();
+      if(me&&gameState.serverNow>=me.blastReadyAt)honk();
+    }
   });
   const up=e=>{
     const pointer=pointers.get(e.pointerId);if(!pointer)return;
@@ -175,6 +219,7 @@ for(const eventName of ['contextmenu','selectstart','dragstart']){
 function releaseControls(){
   clearStick();pointers.clear();
   for(const id of padIds)keys[id]=false;
+  keys.steer=null;
   for(const button of controls.querySelectorAll('.pressed'))button.classList.remove('pressed');
 }
 window.addEventListener('blur',releaseControls);
@@ -329,8 +374,18 @@ function drawCar(p,t){
   roundRect(-6,-12,25,24,7,'#27344f');
   roundRect(1,-10,12,20,4,'#a3dbea');
   roundRect(-23,-9,10,18,4,'#ffffff44');
-  ctx.fillStyle='#fff5d5';roundRect(24,-12,5,8,2,'#fff5d5');roundRect(24,4,5,8,2,'#fff5d5');
-  ctx.fillStyle='#f25173';roundRect(-30,-11,4,7,1,'#f25173');roundRect(-30,4,4,7,1,'#f25173');
+  // Muso inconfondibile: triangolo a punta + due fari bianchi, fanali rossi dietro.
+  ctx.fillStyle='#ecf9ff';
+  ctx.beginPath();ctx.moveTo(12,-12);ctx.lineTo(34,0);ctx.lineTo(12,12);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#173255';
+  ctx.beginPath();ctx.moveTo(17,-6);ctx.lineTo(26,0);ctx.lineTo(17,6);ctx.closePath();ctx.fill();
+  roundRect(28,-14,8,9,2,'#fff8ba');roundRect(28,5,8,9,2,'#fff8ba');
+  roundRect(-31,-12,6,9,1,'#ff324d');roundRect(-31,3,6,9,1,'#ff324d');
+  if(isMe){
+    // Freccia davanti alla propria macchinina, sempre orientata nella direzione di marcia.
+    ctx.fillStyle='#79f5ff';ctx.shadowColor='#79f5ff';ctx.shadowBlur=9;
+    ctx.beginPath();ctx.moveTo(45,0);ctx.lineTo(35,-7);ctx.lineTo(35,7);ctx.closePath();ctx.fill();
+  }
   ctx.restore();
   ctx.save();ctx.textAlign='center';ctx.font='700 14px DM Sans,Arial,sans-serif';
   const name=p.name+(isMe?' (TU)':'');const width=Math.min(220,ctx.measureText(name).width+21);

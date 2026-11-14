@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="Rubaciambella: il party game di macchinine da giocare con gli amici in multiplayer.">
   <title>RUBACIAMBELLA · Microauto, maxi caos</title>
-  <link rel="stylesheet" href="/style.css?v=touch-2">
+  <link rel="stylesheet" href="/style.css?v=mobile-3">
 </head>
 <body>
 <div class="app">
@@ -45,18 +45,18 @@
         </div>
         <div class="touch-controls" id="touchControls" aria-label="Comandi touch">
           <div class="joystick-wrap">
-            <div class="joystick" id="joystick" role="group" aria-label="Joystick: trascina verso l'alto per accelerare, lateralmente per sterzare o verso il basso per andare in retromarcia">
-              <span class="joystick-direction up" aria-hidden="true">▲</span>
+            <div class="joystick" id="joystick" role="group" aria-label="Sterzo: trascina a sinistra o destra">
               <span class="joystick-direction left" aria-hidden="true">◀</span>
               <span class="joystick-direction right" aria-hidden="true">▶</span>
-              <span class="joystick-direction down" aria-hidden="true">▼</span>
-              <div class="joystick-knob" id="joystickKnob" aria-hidden="true"><span>✦</span></div>
+              <div class="joystick-knob" id="joystickKnob" aria-hidden="true"><span>↔</span></div>
             </div>
-            <div class="joystick-caption">TRASCINA PER GUIDARE</div>
+            <div class="joystick-caption">STERZO</div>
           </div>
           <div class="action-pad">
+            <button type="button" data-control="up" class="gas-btn" aria-label="Accelera: tieni premuto">▲<small>GAS</small></button>
+            <button type="button" data-control="down" class="brake-btn" aria-label="Frena, tieni premuto per la retromarcia">■<small>FRENO</small></button>
             <button type="button" data-control="boost" class="boost-btn" aria-label="Attiva il turbo">⚡<small>TURBO</small></button>
-            <button type="button" data-control="blast" class="blast-btn" aria-label="Usa il clacson d'urto">📣<small>BIP!</small></button>
+            <button type="button" data-control="blast" class="blast-btn" aria-label="Clacson sonoro d'urto">📣<small>BIP!</small></button>
           </div>
         </div>
         <div class="arena-bottom"><span><span class="circle-key">W</span><span class="circle-key">A</span><span class="circle-key">S</span><span class="circle-key">D</span> GUIDA</span><span><span class="rect-key">SHIFT</span> TURBO</span><span><span class="rect-key">SPAZIO</span> CLACSON</span><span class="mobile-tip">SU TELEFONO USA I COMANDI TOUCH</span></div>
@@ -70,6 +70,6 @@
     <footer class="footer"><span>FATTO PER LE SERATE CON GLI AMICI, NON PER I PROFESSIONISTI.</span><span>🍩 UN'IDEA ASSURDAMENTE SERIA</span></footer>
   </main>
 </div>
-<script src="/game.js?v=touch-2"></script>
+<script src="/game.js?v=mobile-3"></script>
 </body>
 </html>

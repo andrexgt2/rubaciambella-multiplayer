@@ -95,3 +95,27 @@ test('Durable Object: il nono partecipante viene rifiutato',async()=>{
   for(const ws of members)room.webSocketClose(ws);
   await ctx.flush();
 });
+
+
+test('guida accessibile: sterzo proporzionale, freno e posizioni di partenza sicure',()=>{
+  assert.equal(safeInput({steer:.4}).steer,.4);
+  assert.equal(safeInput({steer:99}).steer,1);
+  assert.equal(safeInput({steer:-88}).steer,-1);
+  assert.equal(safeInput({steer:'0.7'}).steer,undefined);
+  assert.equal(safeInput({left:true}).left,true);
+  const room=makeRoom('ABC234'),p={id:'driver',name:'Pilota',score:0};
+  spawn(p,0,2);room.players.set(p.id,p);
+  for(const oil of [{x:595,y:168,r:49},{x:605,y:572,r:49},{x:165,y:367,r:37},{x:1035,y:367,r:37}]){
+    assert(Math.hypot(p.x-oil.x,p.y-oil.y)>oil.r+23,'la partenza deve essere lontana dall olio');
+  }
+  startMatch(room,1000);tick(room,4100,.05);
+  p.input=safeInput({up:true,steer:0});
+  for(let i=0;i<10;i++)tick(room,4150+i*50,.05);
+  const straightAngle=p.angle,forwardSpeed=p.speed;
+  p.input=safeInput({up:true,steer:.4});
+  tick(room,4700,.05);
+  assert(p.angle>straightAngle,'lo sterzo analogico deve girare gradualmente');
+  assert(p.angle-straightAngle<.09,'la sterzata in 50 ms non deve essere brusca');
+  p.input=safeInput({down:true});tick(room,4750,.05);
+  assert(p.speed<forwardSpeed,'il freno deve rallentare il veicolo');
+});

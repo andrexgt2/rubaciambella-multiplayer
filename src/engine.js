@@ -7,7 +7,12 @@ export const PADS=[{x:480,y:365,r:36},{x:720,y:365,r:36}];
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 const random=(a,b)=>a+Math.random()*(b-a);
 const dist2=(a,b)=>(a.x-b.x)**2+(a.y-b.y)**2;
-export const safeInput=data=>['up','down','left','right','boost','blast'].reduce((a,k)=>(a[k]=data?.[k]===true,a),{});
+export const safeInput=data=>{
+  const input=['up','down','left','right','boost','blast'].reduce((a,k)=>(a[k]=data?.[k]===true,a),{});
+  // Sterzo analogico opzionale: i vecchi client con frecce/WASD funzionano comunque.
+  if(typeof data?.steer==='number'&&Number.isFinite(data.steer))input.steer=clamp(data.steer,-1,1);
+  return input;
+};
 export function makeRoom(code){return {code,players:new Map(),hostId:null,phase:'lobby',countdownEnds:0,matchEnds:0,
   donut:{x:600,y:370,ownerId:null,lockUntil:0},candies:[],nextCandy:0,pickupId:0};}
 function respawnCandy(room){
@@ -19,9 +24,12 @@ function respawnCandy(room){
     room.candies.push(c);break;
   }
 }
+// Posizioni di partenza lontane dalle pozzanghere d'olio e dai respingenti.
+// In precedenza il primo giocatore nasceva già su una chiazza d'olio!
+const STARTS=[[450,255],[750,485],[550,275],[650,465],[450,475],[750,265],[550,465],[650,275]];
 export function spawn(p,i,total){
-  const a=i/Math.max(total,1)*Math.PI*2-Math.PI/2;
-  p.x=600+250*Math.cos(a);p.y=370+175*Math.sin(a);p.angle=a+Math.PI;
+  const [x,y]=STARTS[i%STARTS.length];
+  p.x=x;p.y=y;p.angle=Math.atan2(H/2-y,W/2-x);
   p.speed=0;p.kx=0;p.ky=0;p.boostUntil=0;p.boostReadyAt=0;
   p.blastAt=0;p.shieldUntil=0;p.blastReadyAt=0;p.input={};p.prevInput={};
 }
@@ -55,15 +63,19 @@ function movePlayer(p,room,now,dt){
   }
   p.prevInput={boost:!!inp.boost,blast:!!inp.blast};
   const boosting=now<p.boostUntil;
-  if(up)p.speed+=(boosting?820:500)*dt;
-  else if(down)p.speed-=440*dt;
-  else p.speed*=Math.exp(-2.55*dt);
-  p.speed=clamp(p.speed,-155,boosting?540:300);
-  const steer=Number(right)-Number(left);
-  const steeringFactor=clamp(Math.abs(p.speed)/140,.30,1);
-  p.angle+=steer*3.4*steeringFactor*(p.speed< -5?-1:1)*dt;
+  if(up)p.speed+=(boosting?720:440)*dt;
+  else if(down){
+    // Prima frena completamente; continuando a premere si va in retromarcia.
+    if(p.speed>0)p.speed=Math.max(0,p.speed-760*dt);
+    else p.speed-=320*dt;
+  }else p.speed*=Math.exp(-2.85*dt);
+  p.speed=clamp(p.speed,-125,boosting?460:275);
+  const steer=typeof inp.steer==='number'?inp.steer:Number(right)-Number(left);
+  const steeringFactor=clamp(Math.abs(p.speed)/165,.28,1);
+  p.angle+=steer*1.75*steeringFactor*(p.speed< -5?-1:1)*dt;
   if(OIL.some(o=>dist2(p,o)<(o.r+R-8)**2)){
-    p.angle+=Math.sin(now/115+p.x)*dt*1.75;p.speed*=Math.exp(-.3*dt);
+    // L'olio resta un ostacolo divertente, ma non ribalta più continuamente lo sterzo.
+    p.angle+=Math.sin(now/210+p.x)*dt*.55;p.speed*=Math.exp(-.35*dt);
   }
   if(PADS.some(b=>dist2(p,b)<(b.r+R)**2)&&Math.abs(p.speed)>50)
     p.speed=clamp(p.speed+120*dt,-155,boosting?540:350);
