@@ -46,3 +46,7 @@ destro per il **TURBO** e il **BIP!** contemporaneamente alla guida.
 Durante la pressione dei controlli sono disattivati lo scroll e la selezione del testo
 (incluso il menu di selezione su Safari iOS). Su computer rimangono disponibili
 WASD o frecce, Shift e barra spaziatrice.
+
+## Aggiornamento automatico Cloudflare
+
+Il 14 novembre 2026 è stato richiesto un nuovo deploy dal branch `main` per pubblicare la versione con joystick touch. Questa modifica alla documentazione serve ad attivare un nuovo evento push verso l'integrazione GitHub/Cloudflare; l'esito del deploy va controllato nella dashboard Cloudflare.
