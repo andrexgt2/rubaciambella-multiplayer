@@ -55,3 +55,13 @@ WASD o frecce, Shift e barra spaziatrice.
 - Il clacson usa Web Audio, generato dal gioco al tocco, senza servizi esterni. Il volume dipende dalle impostazioni del dispositivo/browser.
 - Auto con muso a freccia bianca, fari chiari e retro rosso; la propria auto ha anche una freccia luminosa davanti.
 - Sterzata più delicata e partenze lontane dalle macchie d'olio.
+
+## v4 — campo largo e schermo intero
+
+- Arena multiplayer allargata da 1200×740 a **1460×740** coordinate: tutti i giocatori vedono la stessa pista.
+- **Telefono in orizzontale:** il canvas occupa lo schermo e volante/pedali sono sovrapposti ai bordi inferiori, rispettando le safe area degli iPhone. Nessuna rotazione forzata (Safari non la consente normalmente).
+- **Telefono in verticale:** visuale ingrandita che segue la propria auto in modo morbido; un indicatore mostra la direzione della ciambella quando è fuori inquadratura.
+- In partita HUD essenziale: tempo, posizione e punti. GAS, FRENO, TURBO, BIP! e volante restano identici alla v3.
+- Ottimizzazione schermi retina con canvas aggiornato da ResizeObserver.
+
+Per vedere la v4 in produzione controlla l'ultimo deployment GitHub nella dashboard Cloudflare; un commit su `main` non dimostra automaticamente l'esito del deploy.

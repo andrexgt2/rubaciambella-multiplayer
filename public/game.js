@@ -2,10 +2,10 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const canvas=$('game'),ctx=canvas.getContext('2d');
-const W=1200,H=740;
-const BUMPERS=[{x:315,y:225,r:41},{x:885,y:225,r:41},{x:315,y:515,r:41},{x:885,y:515,r:41}];
-const OIL=[{x:595,y:168,r:49},{x:605,y:572,r:49},{x:165,y:367,r:37},{x:1035,y:367,r:37}];
-const PADS=[{x:480,y:365,r:36},{x:720,y:365,r:36}];
+const W=1460,H=740;
+const BUMPERS=[{x:330,y:225,r:41},{x:1130,y:225,r:41},{x:330,y:515,r:41},{x:1130,y:515,r:41}];
+const OIL=[{x:725,y:168,r:49},{x:735,y:572,r:49},{x:195,y:367,r:37},{x:1265,y:367,r:37}];
+const PADS=[{x:580,y:365,r:36},{x:880,y:365,r:36}];
 let socket=null,playerId=null,roomCode=null,gameState=null,lastNow=Date.now(),connected=false;
 let retryTimer=null,connectVersion=0;
 const visuals=new Map(),keys={up:false,down:false,left:false,right:false,boost:false,blast:false,steer:null};
@@ -235,7 +235,10 @@ function setAbility(prefix,readyAt,now,cd){
 }
 function updateUI(){
   const s=gameState;if(!s||!playerId)return;
-  document.body.classList.toggle('game-active',s.phase==='playing'||s.phase==='countdown');
+  const wasActive=document.body.classList.contains('game-active');
+  const active=s.phase==='playing'||s.phase==='countdown';
+  document.body.classList.toggle('game-active',active);
+  if(wasActive!==active)requestAnimationFrame(resizeCanvas);
   $('overlay').classList.toggle('hidden',s.phase==='playing'||s.phase==='countdown');
   $('joinPanel').classList.add('hidden');
   $('lobbyPanel').classList.toggle('hidden',s.phase!=='lobby');
@@ -257,6 +260,9 @@ function updateUI(){
   $('startBtn').textContent=s.players.length>1?'SI PARTE! →':'PROVA DA SOLO →';
   $('hostHint').textContent=isHost()?'Sei il capo del garage: puoi avviare la partita.':'Aspetta che il capo del garage avvii la gara.';
   const sorted=[...s.players].sort((a,b)=>b.score-a.score);
+  const myIndex=sorted.findIndex(p=>p.id===playerId);
+  $('hudRank').textContent='#'+(myIndex+1)+' / '+sorted.length;
+  $('hudScore').textContent=(getMe()?.score??0);
   const scoreList=$('scoreboard');scoreList.replaceChildren(...sorted.map((p,i)=>{
     const row=document.createElement('div');row.className='score-row'+(p.id===playerId?' me':'');
     const rank=document.createElement('div');rank.className='score-rank'+(i===0?' first':'');rank.textContent='#'+(i+1);
@@ -295,7 +301,7 @@ function drawArena(t){
   ctx.beginPath();ctx.ellipse(W/2,H/2,350,265,0,0,Math.PI*2);ctx.stroke();
   ctx.beginPath();ctx.ellipse(W/2,H/2,455,315,0,0,Math.PI*2);ctx.stroke();
   ctx.restore();
-  ctx.save();ctx.globalAlpha=.12;ctx.translate(600,370);ctx.rotate(-.13);
+  ctx.save();ctx.globalAlpha=.12;ctx.translate(W/2,H/2);ctx.rotate(-.13);
   ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font='900 100px sans-serif';ctx.fillText('RUBA',0,-14);ctx.fillText('CIAMBELLA',0,77);ctx.restore();
   // Oil puddles, swirling rings.
   for(const oil of OIL){
@@ -394,14 +400,76 @@ function drawCar(p,t){
   ctx.fillStyle=owner?'#ffdb72':'#f4f5ff';ctx.fillText(name,v.x,y);
   ctx.restore();
 }
-let backgroundLoaded=false;
+// Vista dinamica: usa ogni pixel del campo disponibile (senza barre nere).
+// In verticale la camera inquadra la propria auto; in orizzontale mostra quasi tutta la pista.
+const canvasWrap=$('canvasWrap');
+const viewport={width:1200,height:740,dpr:1};
+const camera={x:W/2,y:H/2,ready:false};
+const coarse=window.matchMedia('(pointer: coarse)');
+function resizeCanvas(){
+  const rect=canvasWrap.getBoundingClientRect();
+  if(rect.width<2||rect.height<2)return;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  viewport.width=rect.width;viewport.height=rect.height;viewport.dpr=dpr;
+  const w=Math.max(1,Math.round(rect.width*dpr));
+  const h=Math.max(1,Math.round(rect.height*dpr));
+  if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+}
+if(typeof ResizeObserver!=='undefined')new ResizeObserver(resizeCanvas).observe(canvasWrap);
+window.addEventListener('resize',resizeCanvas);
+window.addEventListener('orientationchange',()=>{camera.ready=false;requestAnimationFrame(resizeCanvas);});
+resizeCanvas();
+function cameraTransform(){
+  const {width:ww,height:hh,dpr}=viewport;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,ww,hh);
+  ctx.fillStyle='#192846';ctx.fillRect(0,0,ww,hh);
+  const active=document.body.classList.contains('game-active')&&coarse.matches;
+  const portrait=hh>ww;
+  let scale=active?Math.max(ww/W,hh/H):Math.min(ww/W,hh/H);
+  if(active){scale*=portrait?1.035:1.015;}
+  let targetX=W/2,targetY=H/2;
+  if(active&&portrait){
+    const me=getMe();
+    if(me){targetX=me.x+Math.cos(me.angle)*65;targetY=me.y+Math.sin(me.angle)*45;}
+  }
+  // Il mondo non deve lasciare scoperto lo sfondo anche vicino ai muri.
+  const halfW=ww/(2*scale),halfH=hh/(2*scale);
+  targetX=halfW>=W/2?W/2:Math.max(halfW,Math.min(W-halfW,targetX));
+  targetY=halfH>=H/2?H/2:Math.max(halfH,Math.min(H-halfH,targetY));
+  if(!camera.ready){camera.x=targetX;camera.y=targetY;camera.ready=true;}
+  const smoothing=active&&portrait?.13:.18;
+  camera.x+=(targetX-camera.x)*smoothing;
+  camera.y+=(targetY-camera.y)*smoothing;
+  ctx.translate(ww/2-camera.x*scale,hh/2-camera.y*scale);
+  ctx.scale(scale,scale);
+  return {scale,centerX:camera.x,centerY:camera.y,halfW,halfH};
+}
+function drawDonutPointer(view){
+  const s=gameState;
+  if(!s||s.phase!=='playing'||!document.body.classList.contains('game-active')||!coarse.matches)return;
+  const donut=s.donut; if(!donut||donut.ownerId===playerId)return;
+  const {centerX,centerY,halfW,halfH}=view;
+  const dx=donut.x-centerX,dy=donut.y-centerY;
+  if(Math.abs(dx)<halfW*.88&&Math.abs(dy)<halfH*.83)return;
+  // Indicatore per la ciambella fuori schermo (utile con la camera verticale).
+  const angle=Math.atan2(dy,dx);
+  const edge=Math.min((halfW*.77)/Math.max(.001,Math.abs(Math.cos(angle))),
+                      (halfH*.68)/Math.max(.001,Math.abs(Math.sin(angle))));
+  const x=centerX+Math.cos(angle)*edge,y=centerY+Math.sin(angle)*edge;
+  ctx.save();ctx.translate(x,y);ctx.rotate(angle);
+  roundRect(-12,-15,29,30,13,'#141b33ee','#ffd965');
+  ctx.fillStyle='#ffe26e';ctx.beginPath();ctx.moveTo(9,0);ctx.lineTo(-4,-8);ctx.lineTo(-4,8);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
 function draw(now){
-  ctx.clearRect(0,0,W,H);drawArena(now);
+  ctx.save();
+  const view=cameraTransform();
+  drawArena(now);
   if(!gameState){
-    // La schermata iniziale ha un piccolo diorama animato.
-    drawDonut(600,370+Math.sin(now*.002)*5,now,1.35);
-    const sample=[{x:460,y:340,angle:now*.0006,color:'#ffc95f',id:'demo1',name:'',boostUntil:0,blastAt:0},
-      {x:750,y:420,angle:-now*.0004,color:'#ff6597',id:'demo2',name:'',boostUntil:0,blastAt:0}];
+    drawDonut(W/2,H/2+Math.sin(now*.002)*5,now,1.35);
+    const sample=[{x:590,y:340,angle:now*.0006,color:'#ffc95f',id:'demo1',name:'',boostUntil:0,blastAt:0},
+      {x:880,y:420,angle:-now*.0004,color:'#ff6597',id:'demo2',name:'',boostUntil:0,blastAt:0}];
     for(const p of sample){ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.angle);roundRect(-32,-18,64,36,11,p.color);roundRect(-4,-13,23,26,6,'#394e74');ctx.restore();}
   } else {
     const s=gameState;
@@ -410,7 +478,9 @@ function draw(now){
     const ids=new Set(s.players.map(p=>p.id));
     for(const id of visuals.keys())if(!ids.has(id))visuals.delete(id);
     for(const p of s.players)drawCar(p,s.serverNow+(Date.now()-lastNow));
+    drawDonutPointer(view);
   }
+  ctx.restore();
   requestAnimationFrame(draw);
 }
 requestAnimationFrame(draw);

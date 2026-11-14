@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {GameRoom} from '../src/index.js';
 import app from '../src/index.js';
-import {makeRoom,spawn,startMatch,tick,snapshot,saveRoom,loadRoom,safeInput} from '../src/engine.js';
+import {W,H,R,BUMPERS,OIL,PADS,makeRoom,spawn,startMatch,tick,snapshot,saveRoom,loadRoom,safeInput} from '../src/engine.js';
 
 class FakeSocket {
   constructor(){this.attachment=null;this.messages=[];this.closed=false;}
@@ -118,4 +118,24 @@ test('guida accessibile: sterzo proporzionale, freno e posizioni di partenza sic
   assert(p.angle-straightAngle<.09,'la sterzata in 50 ms non deve essere brusca');
   p.input=safeInput({down:true});tick(room,4750,.05);
   assert(p.speed<forwardSpeed,'il freno deve rallentare il veicolo');
+});
+
+
+test('v4: arena larga, spawn sicuri e ciambella centrata',()=>{
+  assert.equal(W,1460);assert.equal(H,740);
+  const room=makeRoom('V4TEST');
+  assert.equal(room.donut.x,W/2);assert.equal(room.donut.y,H/2);
+  const players=Array.from({length:8},(_,i)=>{
+    const p={id:String(i),name:'Pilota'+i};spawn(p,i,8);
+    assert(p.x>=R&&p.x<=W-R);assert(p.y>=R&&p.y<=H-R);
+    for(const obstacle of BUMPERS)assert(Math.hypot(p.x-obstacle.x,p.y-obstacle.y)>R+obstacle.r);
+    for(const oil of OIL)assert(Math.hypot(p.x-oil.x,p.y-oil.y)>R+oil.r);
+    return p;
+  });
+  for(let i=0;i<players.length;i++)for(let j=i+1;j<players.length;j++)
+    assert(Math.hypot(players[i].x-players[j].x,players[i].y-players[j].y)>R*2);
+  assert.equal(PADS.length,2);
+  const state=makeRoom('ABC234');players.forEach(p=>state.players.set(p.id,p));
+  startMatch(state,Date.now());
+  assert.equal(state.donut.x,730);
 });

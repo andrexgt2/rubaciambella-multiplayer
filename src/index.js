@@ -1,4 +1,4 @@
-import {COLORS,LIMIT,makeRoom,loadRoom,saveRoom,spawn,startMatch,tick,snapshot,safeInput} from './engine.js';
+import {W,H,COLORS,LIMIT,makeRoom,loadRoom,saveRoom,spawn,startMatch,tick,snapshot,safeInput} from './engine.js';
 const ROOM_RE=/^[A-HJ-NP-Z2-9]{6}$/;
 const json=(value,status=200)=>new Response(JSON.stringify(value),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
 
@@ -88,7 +88,7 @@ export class GameRoom {
     this.room.players.delete(id);this.sockets.delete(id);
     if(this.room.hostId===id)this.room.hostId=this.room.players.keys().next().value||null;
     if(this.room.donut.ownerId===id){
-      this.room.donut.ownerId=null;this.room.donut.x=600;this.room.donut.y=370;
+      this.room.donut.ownerId=null;this.room.donut.x=W/2;this.room.donut.y=H/2;
       this.room.donut.lockUntil=Date.now()+500;
     }
     if(!this.room.players.size){this.stopLoop();this.room=makeRoom(this.room.code);

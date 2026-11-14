@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="Rubaciambella: il party game di macchinine da giocare con gli amici in multiplayer.">
   <title>RUBACIAMBELLA · Microauto, maxi caos</title>
-  <link rel="stylesheet" href="/style.css?v=mobile-3">
+  <link rel="stylesheet" href="/style.css?v=landscape-4">
 </head>
 <body>
 <div class="app">
@@ -20,9 +20,9 @@
     <section class="hero"><div><div class="eyebrow">IL GIOCO PERFETTO PER ROVINARE LE AMICIZIE <span>✳</span></div><h1>Ruba la ciambella.<br><em>Non fartela rubare.</em></h1><p>Mini macchine, clacson devastanti e una sola ciambella. Vince chi se la tiene più a lungo. Sì, è tutto molto serio.</p></div><div class="hero-doodle" aria-hidden="true"><span>🍩</span><small>100% CAOS</small></div></section>
     <div class="game-layout">
       <section class="arena-card" aria-label="Arena di gioco">
-        <div class="arena-topbar"><div class="live-label"><span class="live-pulse"></span><span id="phaseLabel">PREPARATI AL CAOS</span></div><div class="time-box"><span>⏱</span> <strong id="timeLabel">01:30</strong></div><div class="room-chip">STANZA <strong id="roomLabel">—</strong></div></div>
-        <div class="canvas-wrap">
-          <canvas id="game" width="1200" height="740" aria-label="Gioco di macchinine in vista dall'alto"></canvas>
+        <div class="arena-topbar"><div class="live-label"><span class="live-pulse"></span><span id="phaseLabel">PREPARATI AL CAOS</span></div><div class="race-hud" id="raceHud" aria-live="off"><span class="hud-pill" id="hudRank">#1 / 1</span><span class="hud-pill hud-points">⭐ <strong id="hudScore">0</strong> PT</span></div><div class="time-box"><span>⏱</span> <strong id="timeLabel">01:30</strong></div><div class="room-chip">STANZA <strong id="roomLabel">—</strong></div><span class="rotate-hint" aria-hidden="true">↻ GIRA IL TELEFONO</span></div>
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="game" width="1460" height="740" aria-label="Gioco di macchinine in vista dall'alto"></canvas>
           <div class="overlay" id="overlay">
             <div class="modal" id="joinPanel">
               <div class="modal-icon">🍩</div><div class="modal-eyebrow">PRONTO PER IL DELIRIO?</div>
@@ -70,6 +70,6 @@
     <footer class="footer"><span>FATTO PER LE SERATE CON GLI AMICI, NON PER I PROFESSIONISTI.</span><span>🍩 UN'IDEA ASSURDAMENTE SERIA</span></footer>
   </main>
 </div>
-<script src="/game.js?v=mobile-3"></script>
+<script src="/game.js?v=landscape-4"></script>
 </body>
 </html>

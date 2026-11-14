@@ -1,9 +1,9 @@
 // Motore di gioco condiviso, senza dipendenze Node.js / Socket.IO.
-export const W=1200,H=740,R=23,LIMIT=8,ROUND_MS=90000;
+export const W=1460,H=740,R=23,LIMIT=8,ROUND_MS=90000;
 export const COLORS=['#ffce57','#ff658b','#73e5ff','#9a8cff','#7ef0aa','#ffa36c','#ed8aff','#f5f57d'];
-export const BUMPERS=[{x:315,y:225,r:41},{x:885,y:225,r:41},{x:315,y:515,r:41},{x:885,y:515,r:41}];
-export const OIL=[{x:595,y:168,r:49},{x:605,y:572,r:49},{x:165,y:367,r:37},{x:1035,y:367,r:37}];
-export const PADS=[{x:480,y:365,r:36},{x:720,y:365,r:36}];
+export const BUMPERS=[{x:330,y:225,r:41},{x:1130,y:225,r:41},{x:330,y:515,r:41},{x:1130,y:515,r:41}];
+export const OIL=[{x:725,y:168,r:49},{x:735,y:572,r:49},{x:195,y:367,r:37},{x:1265,y:367,r:37}];
+export const PADS=[{x:580,y:365,r:36},{x:880,y:365,r:36}];
 const clamp=(n,min,max)=>Math.max(min,Math.min(max,n));
 const random=(a,b)=>a+Math.random()*(b-a);
 const dist2=(a,b)=>(a.x-b.x)**2+(a.y-b.y)**2;
@@ -14,7 +14,7 @@ export const safeInput=data=>{
   return input;
 };
 export function makeRoom(code){return {code,players:new Map(),hostId:null,phase:'lobby',countdownEnds:0,matchEnds:0,
-  donut:{x:600,y:370,ownerId:null,lockUntil:0},candies:[],nextCandy:0,pickupId:0};}
+  donut:{x:W/2,y:H/2,ownerId:null,lockUntil:0},candies:[],nextCandy:0,pickupId:0};}
 function respawnCandy(room){
   for(let i=0;i<50;i++){
     const c={id:++room.pickupId,x:random(82,W-82),y:random(86,H-86)};
@@ -26,7 +26,7 @@ function respawnCandy(room){
 }
 // Posizioni di partenza lontane dalle pozzanghere d'olio e dai respingenti.
 // In precedenza il primo giocatore nasceva già su una chiazza d'olio!
-const STARTS=[[450,255],[750,485],[550,275],[650,465],[450,475],[750,265],[550,465],[650,275]];
+const STARTS=[[510,240],[950,500],[635,260],[825,480],[510,500],[950,240],[635,480],[825,260]];
 export function spawn(p,i,total){
   const [x,y]=STARTS[i%STARTS.length];
   p.x=x;p.y=y;p.angle=Math.atan2(H/2-y,W/2-x);
@@ -36,7 +36,7 @@ export function spawn(p,i,total){
 export function startMatch(room,now=Date.now()){
   const ps=[...room.players.values()];ps.forEach((p,i)=>{spawn(p,i,ps.length);p.score=0;});
   room.phase='countdown';room.countdownEnds=now+3000;room.matchEnds=0;
-  room.donut={x:600,y:370,ownerId:null,lockUntil:0};room.candies=[];
+  room.donut={x:W/2,y:H/2,ownerId:null,lockUntil:0};room.candies=[];
   for(let i=0;i<5;i++)respawnCandy(room);
   room.nextCandy=now+5500;
 }
@@ -110,7 +110,7 @@ export function tick(room,now,dt){
     }
   }
   if(room.donut.ownerId&&!room.players.has(room.donut.ownerId)){
-    room.donut.ownerId=null;room.donut.x=600;room.donut.y=370;room.donut.lockUntil=now+500;
+    room.donut.ownerId=null;room.donut.x=W/2;room.donut.y=H/2;room.donut.lockUntil=now+500;
   }
   const owner=room.players.get(room.donut.ownerId);
   if(owner){room.donut.x=owner.x;room.donut.y=owner.y;owner.score+=dt*(room.matchEnds-now<20000?10:5);}
