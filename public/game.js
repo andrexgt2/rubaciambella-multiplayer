@@ -26,6 +26,21 @@ $('soundToggle').addEventListener('click',()=>{
   $('soundToggle').setAttribute('aria-pressed',String(on));
   $('soundToggle').setAttribute('aria-label',on?'Disattiva audio':'Attiva audio');
 });
+function refreshV8Buttons(){
+  for(const button of document.querySelectorAll('[data-v8-toggle]')){
+    button.textContent=sound.isV8On()?'V8 REFERENCE · ON ✓':'PROVA MOTORE F1 V8 ↗';
+    button.setAttribute('aria-pressed',String(sound.isV8On()));
+  }
+}
+for(const button of document.querySelectorAll('[data-v8-toggle]')){
+  button.addEventListener('click',()=>{
+    const on=sound.toggleV8();
+    if(on)unlockAudio();
+    refreshV8Buttons();
+    toast(on?'Anteprima V8 esterna attivata':'Motore GRIDLINE originale attivato');
+  });
+}
+refreshV8Buttons();
 // Accesso ai record anche prima di creare una stanza. Nessuna credenziale richiesta.
 let cachedRecords=[];
 function renderRecords(message=''){

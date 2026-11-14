@@ -9,7 +9,7 @@
   <meta name="description" content="GRIDLINE GP: gare online in monoposto, fino a 8 amici sullo stesso circuito. Gioca da smartphone senza installare nulla.">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
-  <link rel="stylesheet" href="/style.css?v=gp8-1">
+  <link rel="stylesheet" href="/style.css?v=gp9-1">
   <title>GRIDLINE GP · Formula racing multiplayer</title>
 </head>
 <body>
@@ -44,7 +44,10 @@
             <label for="codeInput">CODICE STANZA <span>· se hai un invito</span></label><input id="codeInput" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Vuoto = nuova stanza">
             <button class="primary-button" id="joinBtn" type="submit">ENTRA IN GRIGLIA <span>↗</span></button>
           </form>
-          <div id="joinError" class="error" role="alert"></div><button class="records-link" type="button" data-open-records>🏆 CLASSIFICA RECORD · TOP 20 ↗</button>
+          <div id="joinError" class="error" role="alert"></div>
+          <button class="v8-preview-button" data-v8-toggle type="button" aria-pressed="false">PROVA MOTORE F1 V8 ↗</button>
+          <small class="v8-hint">Anteprima da Myinstants: file esterno, volume basso consigliato. Non incluso nel gioco.</small>
+          <button class="records-link" type="button" data-open-records>🏆 CLASSIFICA RECORD · TOP 20 ↗</button>
           <div class="panel-foot"><span>✦ NESSUN DOWNLOAD</span><span>✦ CROSS-PLATFORM</span></div>
         </div>
         <div class="panel lobby-panel hidden" id="lobbyPanel">
@@ -55,7 +58,8 @@
           <div class="lobby-title">PILOTI IN GRIGLIA <strong id="lobbyCount">1 / 8</strong></div>
           <div class="pilot-list" id="lobbyPlayers"></div>
           <button id="startBtn" class="primary-button" type="button">ACCENDI I SEMAFORI <span>→</span></button>
-          <div class="hint" id="hostHint">Aspetta il via del capostanza</div><button class="records-link" type="button" data-open-records>🏆 CLASSIFICA DEI TEMPI ↗</button>
+          <div class="hint" id="hostHint">Aspetta il via del capostanza</div>
+          <button class="v8-preview-button" data-v8-toggle type="button" aria-pressed="false">PROVA MOTORE F1 V8 ↗</button><button class="records-link" type="button" data-open-records>🏆 CLASSIFICA DEI TEMPI ↗</button>
         </div>
         <div class="panel results-panel hidden" id="resultsPanel">
           <span class="eyebrow"><span class="dot"></span> BANDIERA A SCACCHI</span>
@@ -85,6 +89,6 @@
   <footer class="site-footer">GRIDLINE GP <span>·</span> UN CIRCUITO ORIGINALE. UNA GARA VERA.</footer>
 </div>
 <div class="rotate-gate" id="rotateGate"><div class="rotate-mark">G<span>///</span></div><div class="rotate-phone"><div class="rotate-screen"></div></div><div class="rotate-kicker">MODALITÀ GARA</div><h2>Gira il telefono.<br><em>Accendi la sfida.</em></h2><p>GRIDLINE GP è progettato per giocare in orizzontale. Ruota lo schermo per entrare in pista.</p><span class="rotate-bottom">↻ &nbsp; LANDSCAPE ONLY</span></div>
-<script type="module" src="/game.js?v=gp8-1"></script>
+<script type="module" src="/game.js?v=gp9-1"></script>
 </body>
 </html>

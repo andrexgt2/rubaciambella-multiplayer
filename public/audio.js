@@ -6,12 +6,19 @@ import {rpmForSpeed,IDLE_RPM,REDLINE_RPM} from './transmission.js';
 // Il firing V6 e il cambio sono modellati sopra i campioni.
 const ENGINE_LOW='/sfx/engine-low.wav';
 const ENGINE_HIGH='/sfx/engine-high.wav';
+// Prova opzionale del riferimento scelto dall'utente. L'MP3 NON e' incluso nel repository:
+// il browser lo richiede direttamente a Myinstants. Non e' un asset con licenza
+// di redistribuzione verificata; tenere l'opzione disattivata di default.
+export const V8_REFERENCE_URL='https://www.myinstants.com/media/sounds/f1-v8.mp3';
+
 const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
 export function makeRaceAudio(){
   let ctx=null,master=null,comp=null,engineGain=null,engineFilter=null;
   let samples=[],samplesReady=false,loading=false;
   let combustion=null,combustionGain=null,air=null,airGain=null,airFilter=null,whine=null,whineGain=null;
   let muted=false,lastGear=null,lastShiftSeq=null,lastShiftAt=-10000,lastDirection=0;
+  let v8Selected=false,v8Clip=null,v8Error=false,v8Starting=false;
+  try{v8Selected=localStorage.getItem('gridline_v8_preview')==='1';}catch(_){}
   try{muted=localStorage.getItem('gridline_muted')==='1';}catch(_){}
   const isOn=()=>!muted;
 
@@ -79,14 +86,44 @@ export function makeRaceAudio(){
       samplesReady=false;
     }
   }
+  function startV8(){
+    if(!v8Selected||muted||v8Error||v8Starting)return;
+    try{
+      if(!v8Clip){
+        const C=window.Audio;
+        if(typeof C!=='function')return;
+        v8Clip=new C();
+        v8Clip.src=V8_REFERENCE_URL;
+        v8Clip.preload='auto';v8Clip.loop=true;v8Clip.volume=0;
+        v8Clip.addEventListener('error',()=>{v8Error=true;v8Clip.pause();});
+      }
+      if(!v8Clip.paused)return;
+      v8Starting=true;
+      // Il primo play parte da un gesto dell'utente (necessario su Safari iOS).
+      const p=v8Clip.play();
+      if(p&&typeof p.then==='function')p.then(()=>{v8Starting=false;},()=>{v8Starting=false;v8Error=true;});
+      else v8Starting=false;
+    }catch(_){v8Error=true;v8Starting=false;}
+  }
   function unlock(){
     if(muted)return;
     try{if(!ctx)init();if(ctx?.state==='suspended')ctx.resume().catch(()=>{});}catch(_){}
+    startV8();
+  }
+  function isV8On(){return v8Selected;}
+  function toggleV8(){
+    v8Selected=!v8Selected;
+    try{localStorage.setItem('gridline_v8_preview',v8Selected?'1':'0');}catch(_){}
+    v8Error=false;
+    if(v8Selected)unlock();
+    else if(v8Clip){v8Clip.volume=0;v8Clip.pause();}
+    return v8Selected;
   }
   function toggle(){
     muted=!muted;try{localStorage.setItem('gridline_muted',muted?'1':'0');}catch(_){}
     if(!muted)unlock();
     if(ctx&&master)master.gain.setTargetAtTime(muted?0:.7,ctx.currentTime,.025);
+    if(v8Clip&&muted){v8Clip.volume=0;v8Clip.pause();}
     return !muted;
   }
   function gearClack(direction){
@@ -109,6 +146,16 @@ export function makeRaceAudio(){
     lastGear=gear;lastShiftSeq=shiftSeq;
     const elapsed=t-lastShiftAt;
     const cut=elapsed<.085?.16:elapsed<.23?.16+.84*((elapsed-.085)/.145):1;
+    // Sorgente diretta esterna per il SOLO ascolto comparativo, non asset del gioco.
+    // Usare HTMLAudioElement evita CORS/WebAudio sulla sorgente di Myinstants.
+    const v8Playing=!!(v8Selected&&!v8Error&&v8Clip&&!v8Clip.paused&&v8Clip.readyState>=2);
+    if(v8Clip&&!v8Clip.paused){
+      const rate=clamp(actualRpm/9500,.75,1.48);
+      if(Math.abs(v8Clip.playbackRate-rate)>.015)v8Clip.playbackRate=rate;
+      const target=load&&v8Playing?clamp((.06+throttle*.08)*(offroad?.83:1)*cut,0,.14):0;
+      // Attenzione: Myinstants segnala che il file di riferimento e' molto forte.
+      v8Clip.volume=clamp(v8Clip.volume+(target-v8Clip.volume)*.17,0,.14);
+    }
     if(samplesReady){
       const hi=clamp((actualRpm-6200)/5700,0,1);
       for(const [i,s] of samples.entries()){
@@ -125,7 +172,7 @@ export function makeRaceAudio(){
     whine.frequency.setTargetAtTime(120+(actualRpm/30),t,.04);
     whineGain.gain.setTargetAtTime(load?.007:0,t,.06);
     engineFilter.frequency.setTargetAtTime(1900+actualRpm*.33+throttle*700,t,.06);
-    engineGain.gain.setTargetAtTime(load?(offroad?.78:1)*(.34+.26*throttle)*cut:0,t,elapsed<.23?.012:.055);
+    engineGain.gain.setTargetAtTime(load?(offroad?.78:1)*(.34+.26*throttle)*cut*(v8Playing?.065:1):0,t,elapsed<.23?.012:.055);
   }
-  return {unlock,tone,hit,finish,update,toggle,isOn};
+  return {unlock,tone,hit,finish,update,toggle,isOn,toggleV8,isV8On};
 }

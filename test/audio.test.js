@@ -68,3 +68,32 @@ test('campioni CC0 locali: lettura, decodifica e stratificazione su due registri
     assert.equal(audio.isOn(),true);
   }finally{globalThis.window=oldWin;globalThis.localStorage=oldStorage;}
 });
+
+
+test('anteprima F1 V8: URL remoto, solo opt-in e volume limitato',()=>{
+  const oldWin=globalThis.window,oldStorage=globalThis.localStorage;
+  const created=[];
+  class FakeMedia{
+    constructor(){this.paused=true;this.readyState=4;this.volume=0;this.playbackRate=1;this.loop=false;created.push(this);}
+    addEventListener(){}
+    play(){this.paused=false;return Promise.resolve();}
+    pause(){this.paused=true;}
+  }
+  globalThis.window={AudioContext:AudioContextFake,Audio:FakeMedia};
+  globalThis.localStorage={getItem:()=>null,setItem:()=>{}};
+  try{
+    const audio=makeRaceAudio();
+    assert.equal(audio.isV8On(),false);
+    audio.unlock();
+    assert.equal(created.length,0,'l\'MP3 non viene caricato senza consenso');
+    assert.equal(audio.toggleV8(),true);
+    assert.equal(created.length,1);
+    assert.equal(created[0].src,'https://www.myinstants.com/media/sounds/f1-v8.mp3');
+    audio.update({racing:true,gas:true,gear:4,shiftSeq:2,rpm:10000,speed:240});
+    for(let i=0;i<20;i++)audio.update({racing:true,gas:true,gear:4,shiftSeq:2,rpm:10000,speed:240});
+    assert(created[0].volume<=.14,'protezione volume per il campione segnalato come forte');
+    assert(created[0].playbackRate>1);
+    assert.equal(audio.toggleV8(),false);
+    assert(created[0].paused);
+  }finally{globalThis.window=oldWin;globalThis.localStorage=oldStorage;}
+});

@@ -92,3 +92,18 @@ Questa versione risponde al feedback sul rumore troppo elettronico della v7.
 
 ### Licenza audio
 I file `public/sfx/engine-low.wav` e `public/sfx/engine-high.wav` corrispondono a `loop_2_0.wav` e `loop_5_0.wav`, opera `racing car engine sound loops` di **domasx2**, pubblicata sotto **CC0 1.0** su OpenGameArt. Sono distribuiti insieme al gioco e possono essere riutilizzati secondo la licenza CC0.
+
+
+## v9 · Prova facoltativa del riferimento F1 V8
+
+- Il pulsante **PROVA MOTORE F1 V8** nella schermata iniziale e nella lobby abilita
+  solo sul dispositivo locale un MP3 remoto da Myinstants (`f1-v8.mp3`).
+- Il file **non viene copiato, incorporato o ridistribuito** tramite questo repository.
+  Il browser lo riproduce direttamente dal sito esterno quando il giocatore autorizza
+  la prova; se l'audio non e' accessibile, resta attivo il motore CC0 precedente.
+- Il regime del campione segue gli RPM, il suo volume viene abbassato durante i cambi
+  e l'audio CC0 passa in secondo piano. Il cambio multiplayer a 9 marce non cambia.
+- **Non e' una soluzione di distribuzione definitiva**: servono diritti adeguati per
+  utilizzare stabilmente quel campione come asset pubblico. Anche i loop di un singolo
+  MP3 non possono sostituire un motore multi-campione professionale.
+- Non usare cuffie ad alto volume: Myinstants segnala il campione come molto forte.
