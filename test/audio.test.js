@@ -1,99 +1,92 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {makeRaceAudio} from '../public/audio.js';
-
-class AudioParamFake{
+import {IDLE_RPM,targetRPM} from '../public/powertrain.js';
+class Param{
   constructor(){this.value=0;this.events=[];}
   setTargetAtTime(value){this.value=value;this.events.push(value);}
   setValueAtTime(value){this.value=value;}
   exponentialRampToValueAtTime(value){this.value=value;}
   linearRampToValueAtTime(value){this.value=value;}
 }
-class AudioNodeFake{
-  constructor(){this.gain=new AudioParamFake();this.frequency=new AudioParamFake();
-    this.threshold=new AudioParamFake();this.knee=new AudioParamFake();this.ratio=new AudioParamFake();
-    this.attack=new AudioParamFake();this.release=new AudioParamFake();this.Q=new AudioParamFake();
-    this.playbackRate=new AudioParamFake();this.started=false;}
-  connect(node){return node;}
-  start(){this.started=true;}
-  stop(){}
+class Node{
+  constructor(){this.gain=new Param();this.frequency=new Param();this.playbackRate=new Param();
+    for(const name of ['threshold','knee','ratio','attack','release','Q'])this[name]=new Param();
+    this.starts=0;this.stops=0;}
+  connect(to){return to;}
+  start(){this.starts++;}
+  stop(){this.stops++;}
 }
-class AudioContextFake{
-  constructor(){this.sampleRate=22050;this.state='running';this.currentTime=0;this.destination=new AudioNodeFake();}
-  createGain(){return new AudioNodeFake();}
-  createDynamicsCompressor(){return new AudioNodeFake();}
-  createBiquadFilter(){return new AudioNodeFake();}
-  createBufferSource(){return new AudioNodeFake();}
-  createOscillator(){return new AudioNodeFake();}
-  createBuffer(channels,length){return {getChannelData:()=>new Float32Array(length)};}
+class Ctx{
+  static last=null;
+  constructor(){this.sampleRate=22050;this.state='running';this.currentTime=0;this.destination=new Node();
+    this.nodes=[];Ctx.last=this;}
+  createGain(){const x=new Node();this.nodes.push(x);return x;}
+  createDynamicsCompressor(){return this.createGain();}
+  createBiquadFilter(){return this.createGain();}
+  createBufferSource(){return this.createGain();}
+  createOscillator(){return this.createGain();}
+  createBuffer(_channels,n){return {getChannelData:()=>new Float32Array(n)};}
   resume(){this.state='running';return Promise.resolve();}
 }
-
-test('WebAudio: texture motore inizializzate, cambiata, collisione, mute e riattivazione',()=>{
-  const prev=globalThis.window,oldStorage=globalThis.localStorage;
-  globalThis.window={AudioContext:AudioContextFake};
+const setup=(fetch)=>{
+  const oldW=globalThis.window,oldStorage=globalThis.localStorage;
+  globalThis.window={AudioContext:Ctx,...fetch?{fetch}:{} };
   globalThis.localStorage={getItem:()=>null,setItem:()=>{}};
+  return ()=>{globalThis.window=oldW;globalThis.localStorage=oldStorage;};
+};
+
+test('regime audio fluido: 0-438 senza salti da marce o aggiornamenti di rete',()=>{
+  const cleanup=setup();
   try{
-    const audio=makeRaceAudio();
-    assert.equal(audio.isOn(),true);
-    audio.unlock();
-    for(let gear=1;gear<=9;gear++){
-      audio.update({speed:60*gear,gas:true,racing:true,gear,shiftSeq:gear,rpm:11000});
+    const a=makeRaceAudio();a.unlock();
+    assert.equal(a.getRPM(),IDLE_RPM);
+    let last=a.getRPM();
+    for(let speed=0;speed<=438;speed+=4){
+      const current=a.update({speed,gas:true,racing:true,dt:.016});
+      assert(current>=last);
+      assert(current-last<110,"variazioni smussate fra un frame e l’altro");
+      last=current;
     }
-    audio.update({speed:125,brake:true,racing:true,gear:3,shiftSeq:8,rpm:5400});
-    audio.hit();audio.tone(740,.12);audio.finish();
-    assert.equal(audio.toggle(),false);
-    audio.update({speed:0,racing:false});
-    assert.equal(audio.toggle(),true);
-  }finally{globalThis.window=prev;globalThis.localStorage=oldStorage;}
+    for(let i=0;i<100;i++)a.update({speed:200,gas:false,racing:true,dt:.016});
+    assert(a.getRPM()<last,'rilasciando il gas il motore decelera');
+    a.hit();a.tone(740,.12);a.finish();
+    assert.equal(a.toggle(),false);
+    assert.equal(a.toggle(),true);
+  }finally{cleanup();}
 });
 
-
-test('campioni CC0 locali: lettura, decodifica e stratificazione su due registri',async()=>{
-  const oldWin=globalThis.window,oldStorage=globalThis.localStorage;
-  const urls=[];let starts=0,decodes=0;
-  class SampleAudioContext extends AudioContextFake{
-    async decodeAudioData(bytes){assert(bytes instanceof ArrayBuffer);decodes++;return {duration:1.0};}
-    createBufferSource(){const n=super.createBufferSource(),old=n.start.bind(n);n.start=(...args)=>{starts++;old(...args);};return n;}
+test('campioni originali locali: due loop continui, pitch filtrato e nessun MP3 esterno',async()=>{
+  const urls=[];let starts=0;
+  class SampleCtx extends Ctx{
+    async decodeAudioData(data){assert(data instanceof ArrayBuffer);return {duration:1};}
+    createBufferSource(){const x=super.createBufferSource(),start=x.start.bind(x);
+      x.start=()=>{starts++;start();};return x;}
   }
-  globalThis.window={AudioContext:SampleAudioContext,fetch:async url=>{urls.push(url);return {ok:true,arrayBuffer:async()=>new ArrayBuffer(24)};}};
-  globalThis.localStorage={getItem:()=>null,setItem:()=>{}};
+  const cleanup=setup(async url=>{urls.push(url);return {ok:true,arrayBuffer:async()=>new ArrayBuffer(32)};});
+  globalThis.window.AudioContext=SampleCtx;
+  globalThis.window.Audio=class {constructor(){throw new Error('Non usare player audio esterni');}};
   try{
     const audio=makeRaceAudio();audio.unlock();
     await new Promise(resolve=>setTimeout(resolve,0));
     assert.deepEqual(urls,['/sfx/engine-low.wav','/sfx/engine-high.wav']);
-    assert.equal(decodes,2);
-    assert(starts>=3,'partono i due WAV e il rumore dell’aspirazione');
-    audio.update({racing:true,gas:true,gear:9,rpm:12700,shiftSeq:8,speed:435});
+    assert.equal(starts,3,'due campioni e aspirazione avviati una sola volta');
+    for(let i=0;i<160;i++)audio.update({speed:Math.min(438,i*4),gas:true,racing:true,dt:.016});
+    assert.equal(starts,3,'non bisogna riavviare audio nei singoli frame');
+    assert(audio.getRPM()>IDLE_RPM);
     assert.equal(audio.isOn(),true);
-  }finally{globalThis.window=oldWin;globalThis.localStorage=oldStorage;}
+  }finally{cleanup();}
 });
 
-
-test('anteprima F1 V8: URL remoto, solo opt-in e volume limitato',()=>{
-  const oldWin=globalThis.window,oldStorage=globalThis.localStorage;
-  const created=[];
-  class FakeMedia{
-    constructor(){this.paused=true;this.readyState=4;this.volume=0;this.playbackRate=1;this.loop=false;created.push(this);}
-    addEventListener(){}
-    play(){this.paused=false;return Promise.resolve();}
-    pause(){this.paused=true;}
-  }
-  globalThis.window={AudioContext:AudioContextFake,Audio:FakeMedia};
-  globalThis.localStorage={getItem:()=>null,setItem:()=>{}};
+test('a gara terminata il motore si dissolve a zero e non riparte da solo',()=>{
+  const cleanup=setup();
   try{
-    const audio=makeRaceAudio();
-    assert.equal(audio.isV8On(),false);
-    audio.unlock();
-    assert.equal(created.length,0,'l\'MP3 non viene caricato senza consenso');
-    assert.equal(audio.toggleV8(),true);
-    assert.equal(created.length,1);
-    assert.equal(created[0].src,'https://www.myinstants.com/media/sounds/f1-v8.mp3');
-    audio.update({racing:true,gas:true,gear:4,shiftSeq:2,rpm:10000,speed:240});
-    for(let i=0;i<20;i++)audio.update({racing:true,gas:true,gear:4,shiftSeq:2,rpm:10000,speed:240});
-    assert(created[0].volume<=.14,'protezione volume per il campione segnalato come forte');
-    assert(created[0].playbackRate>1);
-    assert.equal(audio.toggleV8(),false);
-    assert(created[0].paused);
-  }finally{globalThis.window=oldWin;globalThis.localStorage=oldStorage;}
+    const a=makeRaceAudio();a.unlock();
+    const ctx=Ctx.last;
+    a.update({speed:350,gas:true,racing:true,dt:.04});
+    a.update({speed:350,racing:false,dt:.04});
+    const values=ctx.nodes.filter(x=>x.gain.events.length).flatMap(x=>x.gain.events);
+    assert(values.includes(0),"master del motore a zero quando la gara non è attiva");
+    assert.equal(a.isV8On,undefined,'nessuna opzione MP3 remota');
+  }finally{cleanup();}
 });

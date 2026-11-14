@@ -1,5 +1,5 @@
 import {WORLD,ROAD_WIDTH,LAP_COUNT,CENTERLINE,TRACK_LENGTH,pointAt,closestTrack} from './track.js';
-import {makeRaceAudio} from './audio.js';
+import {makeRaceAudio} from './audio.js?v=gp10-1';
 const $=id=>document.getElementById(id),clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
 const canvas=$('trackCanvas'),ctx=canvas.getContext('2d',{alpha:false});
 const state={socket:null,room:null,playerId:null,server:null,connected:false,version:0,lastPacket:0,
@@ -26,21 +26,6 @@ $('soundToggle').addEventListener('click',()=>{
   $('soundToggle').setAttribute('aria-pressed',String(on));
   $('soundToggle').setAttribute('aria-label',on?'Disattiva audio':'Attiva audio');
 });
-function refreshV8Buttons(){
-  for(const button of document.querySelectorAll('[data-v8-toggle]')){
-    button.textContent=sound.isV8On()?'V8 REFERENCE · ON ✓':'PROVA MOTORE F1 V8 ↗';
-    button.setAttribute('aria-pressed',String(sound.isV8On()));
-  }
-}
-for(const button of document.querySelectorAll('[data-v8-toggle]')){
-  button.addEventListener('click',()=>{
-    const on=sound.toggleV8();
-    if(on)unlockAudio();
-    refreshV8Buttons();
-    toast(on?'Anteprima V8 esterna attivata':'Motore GRIDLINE originale attivato');
-  });
-}
-refreshV8Buttons();
 // Accesso ai record anche prima di creare una stanza. Nessuna credenziale richiesta.
 let cachedRecords=[];
 function renderRecords(message=''){
@@ -169,8 +154,6 @@ function updateUI(){
     $('positionValue').innerHTML=String(me.rank??'—')+'<span> / '+s.players.filter(p=>!p.spectator).length+'</span>';
     $('lapValue').innerHTML=String(Math.min(me.laps+1,LAP_COUNT))+'<span> / '+LAP_COUNT+'</span>';
     $('speedValue').textContent=String(Math.round(Math.max(0,me.speed)*.59)).padStart(3,'0');
-    $('gearValue').textContent=me.speed<-3?'R':String(me.gear||1);
-    $('rpmValue').style.setProperty('--rev',String(Math.min(100,Math.round(((me.rpm||5100)-5100)/7900*100)))+'%');
     if(me.laps&&me.lastLap!==state.lastLap){state.lastLap=me.lastLap;toast('GIRO '+me.laps+' · '+lapTime(me.lastLap));beep(960,.13);setTimeout(loadRecords,1300);}
     if(me.hits>state.lastHit){state.lastHit=me.hits;sound.hit();}
     else if(me.hits<state.lastHit)state.lastHit=me.hits;
@@ -352,9 +335,10 @@ function draw(now){
   const d=Math.min(.05,Math.max(.005,(now-lastFrame)/1000||.016));lastFrame=now;
   const {w,h,dpr}=fitCanvas();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
   const server=state.server,me=getMe();
-  sound.update({speed:me?.speed||0,gas:state.keys.gas,brake:state.keys.brake,
-    racing:server?.phase==='racing'&&!me?.spectator,offroad:!!me?.offroad,
-    gear:me?.gear||1,rpm:me?.rpm||5100,shiftSeq:me?.shiftSeq||0});
+  const engineRPM=sound.update({speed:me?.speed||0,gas:state.keys.gas,brake:state.keys.brake,
+    racing:server?.phase==='racing'&&!me?.spectator&&!me?.finishedAt,offroad:!!me?.offroad,dt:d});
+  $('engineRPM').textContent=(engineRPM/1000).toFixed(1);
+  $('rpmValue').style.setProperty('--rev',String(Math.round(Math.max(0,Math.min(100,(engineRPM-1900)/10700*100))))+'%');
   const racing=server&&['racing','countdown'].includes(server.phase)&&me&&!me.spectator;
   let targetX=WORLD.width/2,targetY=WORLD.height/2,targetZoom=Math.min(w/WORLD.width*.92,h/WORLD.height*.92);
   if(racing){

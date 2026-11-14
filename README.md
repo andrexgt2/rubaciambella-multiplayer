@@ -18,14 +18,12 @@ Un gioco **multiplayer di corse con monoposto** progettato per smartphone in ori
 
 La camera segue la monoposto, quindi la tua macchina resta vicino al centro dello schermo. Le barriere impediscono di tagliare fuori dal circuito. I piloti che entrano durante una gara diventano spettatori fino alla rivincita. Se Safari si riconnette entro circa 12 secondi, il pilota riprende lo stesso posto in gara.
 
-## Audio e classifica persistente · v6
+## Audio e classifica persistente · v10 (attuale)
 
-- Motore con due brevi registrazioni CC0 di automobile da corsa, integrate nella web app, accompagnate da una sintesi leggera del timbro V6 e da un cambio a nove rapporti. Il suono segue velocità e acceleratore, oltre a countdown, urti e traguardo. Il browser attiva l'audio dopo un gesto, e l'icona ♫ permette di disattivarlo.
-- Pulsante **CLASSIFICA RECORD** nella schermata di ingresso, nel box e a fine gara: mostra i migliori **20 tempi sul giro** del Circuito delle Creste.
-- I record sono validati dal server, non inviati dal browser. Ogni nome pilota appare con il suo giro più veloce; nomi uguali condividono la stessa voce (non ci sono account autenticati).
-- I record vengono conservati nel Durable Object globale `gridline:global-laps:creste-v1`, usando il binding `GAME_ROOMS` già esistente e la chiave storage `best-laps-creste-v1`. Non dipendono dalla stanza né dai nuovi deploy; restano salvati salvo eliminazione esplicita dei dati del Durable Object.
-- Endpoint pubblico di sola lettura: `GET /api/leaderboard`, senza cache. Le scritture avvengono solo dal backend che valida i checkpoint; i giri inferiori a 12 secondi sono scartati come controllo minimo di plausibilità.
-- I record iniziano a popolarsi dalle nuove gare v6: non recuperano automaticamente i tempi delle versioni precedenti.
+- **Motore a regime continuo:** nessun cambio o taglio di potenza. Il server calcola accelerazione, resistenza aerodinamica e un RPM inerziale; il telefono ricostruisce localmente il proprio RPM a 60 FPS in base alla velocita' e al pedale GAS, evitando scatti dovuti ai pacchetti multiplayer.
+- Due campioni locali CC0 di automobile da corsa sono miscelati con Web Audio mediante crossfade e pitch automatici: il suono e' una simulazione, **non una registrazione F1 autentica**. Un basso strato originale di impulsi V8 (4 accensioni per giro) e aspirazione filtrata arricchiscono il timbro. Non c'e' streaming esterno Myinstants e l'audio torna silenzioso fuori gara.
+- Cruscotto con RPM x1000 progressivi al posto della marcia. Countdown, urti e traguardo restano sonorizzati.
+- **Hall of Fame:** i migliori 20 giri validati dal server restano nel Durable Object globale anche dopo aver chiuso la stanza o aggiornato il gioco. La classifica non richiede account; nickname identici condividono il record.
 
 ## Architettura
 
@@ -71,14 +69,14 @@ Per deploy manuale facoltativo: `npm run deploy`.
 La visualizzazione è stata provata in Chromium simulando i viewport 844×390, 667×375 e 390×844 e i comandi touch combinati. La pubblicazione reale va comunque verificata nel proprio account Cloudflare e provata almeno con **due telefoni contemporaneamente**.
 
 
-## V7 (storico): Motore e cambio automatico
+## V7 (storico, sostituito): Motore e cambio automatico
 
 Il motore audio ora usa due texture sonore di combustione e aspirazione create in Web Audio, non una singola onda sawtooth. Sei rapporti automatici cambiano in base alla velocità nella simulazione server: il regime sale prima della cambiata, poi scende quando entra il rapporto superiore. Si sente anche il breve taglio di potenza e uno scatto meccanico. In HUD compaiono il numero della marcia e una barra del regime. L'audio si attiva solo in seguito a un tocco, conserva il pulsante per disattivarlo ed è pensato per Safari e Android.
 
 **Nota:** il motore è una simulazione acustica originale, non una registrazione di un'autentica monoposto. Non sono stati inseriti audio di Formula 1 protetti da diritti. La classifica permanente e le stanze multiplayer rimangono invariate.
 
 
-## V8: 9 marce e registrazione audio CC0 integrata
+## V8 (storico, sostituito): 9 marce e registrazione audio CC0 integrata
 
 Questa versione risponde al feedback sul rumore troppo elettronico della v7.
 
@@ -107,3 +105,8 @@ I file `public/sfx/engine-low.wav` e `public/sfx/engine-high.wav` corrispondono 
   utilizzare stabilmente quel campione come asset pubblico. Anche i loop di un singolo
   MP3 non possono sostituire un motore multi-campione professionale.
 - Non usare cuffie ad alto volume: Myinstants segnala il campione come molto forte.
+
+
+## V10: motore progressivo senza cambi
+
+I sistemi di cambiata della v7/v8/v9 sono stati rimossi su richiesta: non esiste piu' un salto di rapporto, un taglio di coppia o una dipendenza da audio remoto. La simulazione lato server produce un'accelerazione fisicamente continua, con trascinamento aerodinamico quadratico e un regime inerziale. L'Web Audio Engine mantiene i due sample CC0 in loop **solo come texture sotto il controllo del mix**, li sovrappone a potenza costante e aggiorna la frequenza gradualmente. Il master si dissolve a zero in lobby / risultati / spettatore. L'RPM visualizzato segue lo stesso modello utilizzato per l'audio.

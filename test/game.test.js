@@ -171,29 +171,41 @@ test('classifica: massimo 20 piloti, nessuna collisione di nomi con maiuscole e 
   assert.equal(records.filter(r=>r.key==='pilot0').length,1);
 });
 
-// V8: nove rapporti sequenziali con isteresi e calo RPM misurabile.
-test('nove rapporti: otto salite, scalata e taglio coppia autorevole', async()=>{
-  const {MAX_GEAR,nextGear,rpmForSpeed,UPSHIFT_AT,DOWNSHIFT_BELOW}=await import('../public/transmission.js');
-  assert.equal(MAX_GEAR,9);
-  assert.equal(UPSHIFT_AT.length,8);
-  assert.equal(DOWNSHIFT_BELOW.length,9);
-  for(let g=1;g<=8;g++){
-    const speed=UPSHIFT_AT[g-1];
-    assert.equal(nextGear(g,speed),g+1,`${g} -> ${g+1}`);
-    assert.equal(nextGear(g,speed,true),g+1);
-    assert.equal(nextGear(g,speed,false),g,'nessun cambio durante il taglio coppia');
-    assert(rpmForSpeed(g,speed-1,true)>rpmForSpeed(g+1,speed,true)+1600,'il motore cala di regime in cambiata');
+// V10: accelerazione continua, nessun salto di marcia e motore inerziale.
+test('motore continuo: carico e inerzia senza scalini o cambiata',async()=>{
+  const {IDLE_RPM,REDLINE_RPM,TOP_SPEED,targetRPM,advanceRPM}=await import('../public/powertrain.js');
+  assert.equal(TOP_SPEED,438);
+  assert.equal(targetRPM(0),IDLE_RPM);
+  assert(targetRPM(0,true)>IDLE_RPM);
+  assert(targetRPM(430,true)<REDLINE_RPM);
+  let last=targetRPM(0,true),engineRPM=IDLE_RPM;
+  for(let speed=0;speed<438;speed+=6){
+    const cur=targetRPM(speed,true);
+    assert(cur>=last,'la curva di regime e monotona e senza cambiata');
+    assert(cur-last<240,'non ci sono scalini di frequenza');
+    last=cur;
+    const prev=engineRPM;
+    engineRPM=advanceRPM(engineRPM,cur,.05);
+    assert(engineRPM>=prev);
+    assert(engineRPM-prev<341,"l’inerzia limita le variazioni in 50 ms");
   }
-  assert.equal(nextGear(9,438),9);
-  assert.equal(nextGear(5,90),4);
-  assert.equal(nextGear(2,71),2,'isteresi evita il continuo passaggio tra due marce');
-  const room=makeRoom('ABC234'),p={id:'a',name:'Marce',color:'#fff'};
-  room.players.set(p.id,p);startMatch(room,1000);tick(room,5000,.05);
-  p.speed=50;p.gear=1;p.input=safeInput({gas:true});p.lastInputAt=5050;
-  tick(room,5050,.05);
-  assert.equal(p.gear,2);assert.equal(p.shiftSeq,1);
-  assert(p.shiftUntil>5050);
-  const saved=snapshot(room,5050).players[0];
-  assert.equal(saved.gear,2);assert.equal(saved.shiftSeq,1);assert(saved.rpm>5000);
-  tick(room,5100,.05);assert.equal(p.shiftSeq,1,'evita due cambiate immediate');
+  for(let t=0;t<25;t++)engineRPM=advanceRPM(engineRPM,targetRPM(40),.05);
+  assert(engineRPM> IDLE_RPM);
+  const room=makeRoom('ABC234'),driver={id:'v10',name:'Test',color:'#f00'};
+  room.players.set(driver.id,driver);startMatch(room,1000);tick(room,5000,.05);
+  let previous=driver.speed,prevRPM=driver.rpm,cleanTicks=0;
+  for(let i=0;i<95;i++){
+    const now=5050+i*50;driver.input=safeInput({gas:true});driver.lastInputAt=now;
+    tick(room,now,.05);
+    if(driver.hits||driver.offroad)break;
+    cleanTicks++;
+    assert(driver.speed>=previous,'nessun taglio di coppia accelerando');
+    assert(driver.rpm>=prevRPM-1,'il regime non cade improvvisamente');
+    previous=driver.speed;prevRPM=driver.rpm;
+  }
+  assert(cleanTicks>=6,'lancio e trazione testati prima delle collisioni');
+  const publicDriver=snapshot(room).players[0];
+  assert(publicDriver.rpm>IDLE_RPM);
+  assert.equal('gear' in publicDriver,false);
+  assert.equal('shiftSeq' in publicDriver,false);
 });

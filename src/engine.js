@@ -1,6 +1,6 @@
 import {WORLD, ROAD_WIDTH, TRACK_LENGTH, LAP_COUNT, RACE_LIMIT_MS, closestTrack,
   pointAt, forwardDelta, checkpointS} from '../public/track.js';
-import {nextGear,rpmForSpeed} from '../public/transmission.js';
+import {IDLE_RPM,targetRPM,advanceRPM,TOP_SPEED} from '../public/powertrain.js';
 
 export const LIMIT=8;
 export const COLORS=['#ffce45','#f95b71','#5de2ee','#9875ff','#64eb9d','#ff984c','#e7a6ff','#f5f4ec'];
@@ -22,7 +22,7 @@ export function spawn(p,index=0){
   p.laps=0;p.nextGate=1;p.progress=closestTrack(p.x,p.y).s;
   p.lapStartedAt=0;p.bestLap=0;p.lastLap=0;p.finishedAt=0;p.recordedLaps=0;
   p.spectator=false;p.offroad=false;p.hits=0;
-  p.gear=1;p.rpm=5100;p.shiftSeq=0;p.shiftUntil=0;
+  p.rpm=IDLE_RPM;
 }
 export function startMatch(room,now=Date.now()){
   const players=[...room.players.values()];
@@ -35,21 +35,21 @@ function movePlayer(p,dt,now){
   const before=closestTrack(p.x,p.y);
   p.offroad=before.distance>ROAD_WIDTH*.5-9;
   const gripping=p.offroad?.55:1;
-  const engine=330*gripping,brakes=510;
-  if(input.gas&&!input.brake){p.speed+=engine*dt;}
+  // Modello continuo di trazione: coppia decrescente e resistenza quadratica dell'aria.
+  // Nessun taglio coppia, nessun gradino a velocita' specifiche.
+  const speedRatio=clamp(Math.max(0,p.speed)/TOP_SPEED,0,1);
+  const engineForce=365*(1-.31*speedRatio*speedRatio)*gripping;
+  const airDrag=.00130*Math.abs(p.speed)*p.speed;
+  if(input.gas&&!input.brake){p.speed+=(engineForce-airDrag)*dt;}
   else if(input.brake){
-    p.speed=p.speed>4?Math.max(0,p.speed-brakes*dt):p.speed-230*dt;
-  } else {p.speed*=Math.exp(-1.25*dt);}
-  // Cambio automatico fisico: salita di rapporto a regime alto, scalata in frenata.
-  if(now>=(p.shiftUntil||0)){
-    const newGear=nextGear(p.gear||1,Math.max(0,p.speed));
-    if(newGear!==(p.gear||1)){p.gear=newGear;p.shiftUntil=now+170;p.shiftSeq=(p.shiftSeq||0)+1;}
-  }
-  if(now<(p.shiftUntil||0)&&input.gas&&!input.brake)p.speed-=engine*dt*.82; // taglio coppia ben distinguibile fra i rapporti
-  p.rpm=rpmForSpeed(p.gear||1,p.speed,input.gas,input.brake);
-  const maximum=p.offroad?200:438;
+    p.speed=p.speed>4?Math.max(0,p.speed-(540+Math.max(0,airDrag))*dt):p.speed-230*dt;
+  }else if(p.speed>0){
+    p.speed=Math.max(0,p.speed-(Math.max(0,airDrag)+21)*dt);
+  }else p.speed*=Math.exp(-1.65*dt);
+  const maximum=p.offroad?200:TOP_SPEED;
   p.speed=clamp(p.speed,-100,maximum);
   if(Math.abs(p.speed)<1&&!input.gas&&!input.brake)p.speed=0;
+  p.rpm=advanceRPM(p.rpm,targetRPM(p.speed,input.gas,input.brake),dt);
   // Lo sterzo è analogico, progressivo, e non può ruotare l'auto da ferma.
   const steer=clamp(input.steer||0,-1,1);
   const turnRate=(.25+1.45*Math.min(1,Math.abs(p.speed)/205))*(p.speed< -3?-1:1);
@@ -146,7 +146,7 @@ export function snapshot(room,now=Date.now()){
     elapsed:room.startedAt?Math.max(0,(now-room.startedAt)/1000):0,
     remaining:room.phase==='racing'?Math.max(0,(room.raceEnds-now)/1000):RACE_LIMIT_MS/1000,
     players:[...room.players.values()].map(p=>({id:p.id,name:p.name,color:p.color,
-      x:p.x,y:p.y,angle:p.angle,speed:p.speed,gear:p.gear||1,rpm:p.rpm||3300,shiftSeq:p.shiftSeq||0,
+      x:p.x,y:p.y,angle:p.angle,speed:p.speed,rpm:p.rpm||IDLE_RPM,
       vx:p.vx,vy:p.vy,laps:p.laps,
       nextGate:p.nextGate,progress:p.progress,lastLap:p.lastLap,bestLap:p.bestLap,
       finishedAt:p.finishedAt,hits:p.hits,spectator:p.spectator,offroad:p.offroad,connected:p.connected!==false,
