@@ -106,6 +106,7 @@ function connect(name,code){
 }
 $('joinForm').addEventListener('submit',event=>{
   event.preventDefault();
+  unlockAudio(); // anche gli invitati attivano i suoni prima del semaforo.
   connect($('nameInput').value.trim().slice(0,16)||'Pilota', $('codeInput').value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6));
 });
 $('startBtn').addEventListener('click',()=>{unlockAudio();send('start');try{screen.orientation?.lock?.('landscape').catch(()=>{});}catch(_){}});
