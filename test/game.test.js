@@ -171,29 +171,29 @@ test('classifica: massimo 20 piloti, nessuna collisione di nomi con maiuscole e 
   assert.equal(records.filter(r=>r.key==='pilot0').length,1);
 });
 
-// V7: la marcia cambia nel motore autorevole, non in base a messaggi del browser.
-test('trasmissione a sei rapporti: salita, scalata, calo RPM e nessun cambio ripetuto', async()=>{
-  const {nextGear,rpmForSpeed,UPSHIFT_AT,DOWNSHIFT_BELOW}=await import('../public/transmission.js');
-  assert.equal(UPSHIFT_AT.length,5);
-  assert.equal(DOWNSHIFT_BELOW.length,6);
-  assert.equal(nextGear(1,70),2);
-  assert.equal(nextGear(2,128),3);
-  assert.equal(nextGear(3,195),4);
-  assert.equal(nextGear(4,269),5);
-  assert.equal(nextGear(5,354),6);
-  assert.equal(nextGear(6,438),6);
-  assert.equal(nextGear(5,180),4);
-  assert.equal(nextGear(3,60),2);
-  assert.equal(nextGear(2,90),2,'isteresi evita il continuo passaggio tra due marce');
-  assert(rpmForSpeed(1,69,true)>rpmForSpeed(2,70,true)+2500,'inserendo seconda il regime cala nettamente');
-  assert(rpmForSpeed(5,350,true)>rpmForSpeed(6,354,true)+2000);
+// V8: nove rapporti sequenziali con isteresi e calo RPM misurabile.
+test('nove rapporti: otto salite, scalata e taglio coppia autorevole', async()=>{
+  const {MAX_GEAR,nextGear,rpmForSpeed,UPSHIFT_AT,DOWNSHIFT_BELOW}=await import('../public/transmission.js');
+  assert.equal(MAX_GEAR,9);
+  assert.equal(UPSHIFT_AT.length,8);
+  assert.equal(DOWNSHIFT_BELOW.length,9);
+  for(let g=1;g<=8;g++){
+    const speed=UPSHIFT_AT[g-1];
+    assert.equal(nextGear(g,speed),g+1,`${g} -> ${g+1}`);
+    assert.equal(nextGear(g,speed,true),g+1);
+    assert.equal(nextGear(g,speed,false),g,'nessun cambio durante il taglio coppia');
+    assert(rpmForSpeed(g,speed-1,true)>rpmForSpeed(g+1,speed,true)+1600,'il motore cala di regime in cambiata');
+  }
+  assert.equal(nextGear(9,438),9);
+  assert.equal(nextGear(5,90),4);
+  assert.equal(nextGear(2,71),2,'isteresi evita il continuo passaggio tra due marce');
   const room=makeRoom('ABC234'),p={id:'a',name:'Marce',color:'#fff'};
   room.players.set(p.id,p);startMatch(room,1000);tick(room,5000,.05);
-  p.speed=72;p.gear=1;p.input=safeInput({gas:true});p.lastInputAt=5050;
+  p.speed=50;p.gear=1;p.input=safeInput({gas:true});p.lastInputAt=5050;
   tick(room,5050,.05);
   assert.equal(p.gear,2);assert.equal(p.shiftSeq,1);
   assert(p.shiftUntil>5050);
   const saved=snapshot(room,5050).players[0];
-  assert.equal(saved.gear,2);assert.equal(saved.shiftSeq,1);assert(saved.rpm>=2800);
-  tick(room,5100,.05);assert.equal(p.shiftSeq,1,'non cambia subito marcia una seconda volta');
+  assert.equal(saved.gear,2);assert.equal(saved.shiftSeq,1);assert(saved.rpm>5000);
+  tick(room,5100,.05);assert.equal(p.shiftSeq,1,'evita due cambiate immediate');
 });

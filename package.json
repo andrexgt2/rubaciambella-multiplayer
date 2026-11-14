@@ -1,6 +1,6 @@
 {
   "name": "gridline-gp-cloudflare",
-  "version": "7.0.0",
+  "version": "8.0.0",
   "private": true,
   "type": "module",
   "description": "GRIDLINE GP: Formula-style racing multiplayer, Cloudflare Workers e Durable Objects",

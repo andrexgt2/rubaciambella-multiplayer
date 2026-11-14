@@ -22,7 +22,7 @@ export function spawn(p,index=0){
   p.laps=0;p.nextGate=1;p.progress=closestTrack(p.x,p.y).s;
   p.lapStartedAt=0;p.bestLap=0;p.lastLap=0;p.finishedAt=0;p.recordedLaps=0;
   p.spectator=false;p.offroad=false;p.hits=0;
-  p.gear=1;p.rpm=3300;p.shiftSeq=0;p.shiftUntil=0;
+  p.gear=1;p.rpm=5100;p.shiftSeq=0;p.shiftUntil=0;
 }
 export function startMatch(room,now=Date.now()){
   const players=[...room.players.values()];
@@ -43,9 +43,9 @@ function movePlayer(p,dt,now){
   // Cambio automatico fisico: salita di rapporto a regime alto, scalata in frenata.
   if(now>=(p.shiftUntil||0)){
     const newGear=nextGear(p.gear||1,Math.max(0,p.speed));
-    if(newGear!==(p.gear||1)){p.gear=newGear;p.shiftUntil=now+135;p.shiftSeq=(p.shiftSeq||0)+1;}
+    if(newGear!==(p.gear||1)){p.gear=newGear;p.shiftUntil=now+170;p.shiftSeq=(p.shiftSeq||0)+1;}
   }
-  if(now<(p.shiftUntil||0)&&input.gas&&!input.brake)p.speed-=engine*dt*.72; // taglio coppia
+  if(now<(p.shiftUntil||0)&&input.gas&&!input.brake)p.speed-=engine*dt*.82; // taglio coppia ben distinguibile fra i rapporti
   p.rpm=rpmForSpeed(p.gear||1,p.speed,input.gas,input.brake);
   const maximum=p.offroad?200:438;
   p.speed=clamp(p.speed,-100,maximum);

@@ -20,7 +20,7 @@ La camera segue la monoposto, quindi la tua macchina resta vicino al centro dell
 
 ## Audio e classifica persistente · v6
 
-- Motore sintetizzato in tempo reale che segue velocità e acceleratore, suoni di countdown, giro, urti e bandiera a scacchi. Non usa tracce o file audio esterni. L'audio si attiva dopo un gesto dell'utente, come richiesto dai browser mobile; l'icona ♫ permette di disattivarlo.
+- Motore con due brevi registrazioni CC0 di automobile da corsa, integrate nella web app, accompagnate da una sintesi leggera del timbro V6 e da un cambio a nove rapporti. Il suono segue velocità e acceleratore, oltre a countdown, urti e traguardo. Il browser attiva l'audio dopo un gesto, e l'icona ♫ permette di disattivarlo.
 - Pulsante **CLASSIFICA RECORD** nella schermata di ingresso, nel box e a fine gara: mostra i migliori **20 tempi sul giro** del Circuito delle Creste.
 - I record sono validati dal server, non inviati dal browser. Ogni nome pilota appare con il suo giro più veloce; nomi uguali condividono la stessa voce (non ci sono account autenticati).
 - I record vengono conservati nel Durable Object globale `gridline:global-laps:creste-v1`, usando il binding `GAME_ROOMS` già esistente e la chiave storage `best-laps-creste-v1`. Non dipendono dalla stanza né dai nuovi deploy; restano salvati salvo eliminazione esplicita dei dati del Durable Object.
@@ -71,8 +71,24 @@ Per deploy manuale facoltativo: `npm run deploy`.
 La visualizzazione è stata provata in Chromium simulando i viewport 844×390, 667×375 e 390×844 e i comandi touch combinati. La pubblicazione reale va comunque verificata nel proprio account Cloudflare e provata almeno con **due telefoni contemporaneamente**.
 
 
-## V7: Motore di monoposto e cambio automatico
+## V7 (storico): Motore e cambio automatico
 
 Il motore audio ora usa due texture sonore di combustione e aspirazione create in Web Audio, non una singola onda sawtooth. Sei rapporti automatici cambiano in base alla velocità nella simulazione server: il regime sale prima della cambiata, poi scende quando entra il rapporto superiore. Si sente anche il breve taglio di potenza e uno scatto meccanico. In HUD compaiono il numero della marcia e una barra del regime. L'audio si attiva solo in seguito a un tocco, conserva il pulsante per disattivarlo ed è pensato per Safari e Android.
 
 **Nota:** il motore è una simulazione acustica originale, non una registrazione di un'autentica monoposto. Non sono stati inseriti audio di Formula 1 protetti da diritti. La classifica permanente e le stanze multiplayer rimangono invariate.
+
+
+## V8: 9 marce e registrazione audio CC0 integrata
+
+Questa versione risponde al feedback sul rumore troppo elettronico della v7.
+
+- **Nove marce avanti** simulate nel motore server, con otto cambiate riconoscibili in accelerazione, scalata automatica, isteresi e circa 170 ms di taglio di coppia. La retromarcia resta disponibile tenendo premuto FRENO da fermo. Sono **nove rapporti da gioco**, non la specifica regolamentare di Formula 1 (otto marce avanti + retromarcia).
+- **Motore campionato**: due piccoli loop PCM WAV CC0 di motore d'auto ottenuti da [domasx2 / OpenGameArt](https://opengameart.org/content/racing-car-engine-sound-loops), con variazione del pitch basata sui giri e crossfade tra registri; leggera componente originale V6 e aspirazione. I file vengono serviti dallo stesso Worker, anche durante il multiplayer.
+- Se uno smartphone non può decodificare i WAV, il motore passa a un fallback sintetico; gli altri suoni continuano a funzionare.
+- Le cambiate sono calcolate da Cloudflare e inviate tramite lo snapshot multiplayer (`gear`, `rpm`, `shiftSeq`), non inventate dal browser.
+- Versione Web `gp8-1` per evitare file JavaScript/audio memorizzati in cache da Safari.
+
+**Qualità audio**: i campioni CC0 provengono da un'automobile da corsa e NON da una vera monoposto di Formula 1. Sono un passo concreto verso un timbro meno elettronico; una riproduzione veramente fedele richiederebbe registrazioni autentiche con licenza adeguata a diversi regimi.
+
+### Licenza audio
+I file `public/sfx/engine-low.wav` e `public/sfx/engine-high.wav` corrispondono a `loop_2_0.wav` e `loop_5_0.wav`, opera `racing car engine sound loops` di **domasx2**, pubblicata sotto **CC0 1.0** su OpenGameArt. Sono distribuiti insieme al gioco e possono essere riutilizzati secondo la licenza CC0.

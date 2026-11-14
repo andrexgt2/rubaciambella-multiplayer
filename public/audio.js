@@ -1,77 +1,83 @@
-import {rpmForSpeed} from './transmission.js';
+import {rpmForSpeed,IDLE_RPM,REDLINE_RPM} from './transmission.js';
 
-// Motore racing originale. Due texture audio campionate proceduralmente, filtrate
-// in Web Audio: combustione/aspirazione, meccanica, cambio 6 marce, rilascio.
-// Il segnale non è un campione registrato di una monoposto reale.
+// Registrazioni CC0 campionate a due regimi: layer portante reale, non oscillatore puro.
+// Fonti: domasx2, https://opengameart.org/content/racing-car-engine-sound-loops
+// NOTA: campioni di automobile da corsa, NON registrazioni di una vera F1.
+// Il firing V6 e il cambio sono modellati sopra i campioni.
+const ENGINE_LOW='/sfx/engine-low.wav';
+const ENGINE_HIGH='/sfx/engine-high.wav';
+const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
 export function makeRaceAudio(){
   let ctx=null,master=null,comp=null,engineGain=null,engineFilter=null;
-  let exhaust=null,intake=null,airFilter=null,intakeGain=null,whine=null,whineGain=null;
-  let muted=false,lastGear=null,lastShiftSeq=null,lastGas=false,lastShiftAt=-Infinity,lastUpdateAt=0;
+  let samples=[],samplesReady=false,loading=false;
+  let combustion=null,combustionGain=null,air=null,airGain=null,airFilter=null,whine=null,whineGain=null;
+  let muted=false,lastGear=null,lastShiftSeq=null,lastShiftAt=-10000,lastDirection=0;
   try{muted=localStorage.getItem('gridline_muted')==='1';}catch(_){}
   const isOn=()=>!muted;
-  const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
 
-  function texture(context,kind){
-    const sr=context.sampleRate,N=sr*1,buffer=context.createBuffer(1,N,sr),out=buffer.getChannelData(0);
-    const noise=new Float32Array(N);let seed=kind==='exhaust'?51017:28807;
-    for(let i=0;i<N;i++){
-      seed=(Math.imul(seed,1664525)+1013904223)|0;
-      noise[i]=((seed>>>0)/2147483648)-1;
-    }
-    // Unisce i bordi dell'anello in modo che il loop non produca click.
-    const edge=2048;for(let i=0;i<edge;i++){
-      const t=i/edge,v=noise[i]*(t)+noise[N-edge+i]*(1-t);
-      noise[i]=v;noise[N-edge+i]=v;
-    }
-    let low=0,previous=0;
-    for(let i=0;i<N;i++){
-      const t=i/sr;
-      const revPhase=2*Math.PI*100*t; // 6000 rpm di riferimento.
-      const fire=revPhase*3;           // tre impulsi per giro, V6 quattro tempi.
-      const pulse=Math.pow(Math.max(0,Math.cos(fire)),12);
-      const harmonics=Math.sin(fire)+.37*Math.sin(2*fire-.55)+.20*Math.sin(3*fire+.2)
-        +.14*Math.sin(4*fire-.12)+.09*Math.sin(6*fire+.4);
-      low+=(noise[i]-low)*(kind==='exhaust'?.045:.23);
-      const high=noise[i]-low;
-      if(kind==='exhaust'){
-        const base=Math.tanh((.42*harmonics+.64*(pulse-.19)+.37*low*(.2+.8*pulse))*1.65);
-        out[i]=base*.54+.08*Math.sin(revPhase-.4)+.09*Math.sin(revPhase*2+.2);
-      }else{
-        // Aspirazione e fruscio di trasmissione, un po' ruvido e irregolare.
-        const rattling=.47*Math.sin(fire*2+.4)+.2*Math.sin(fire*4-.7);
-        out[i]=Math.tanh((high*(.35+.8*pulse)+.19*rattling)*1.6)*.48;
-      }
-      previous=out[i];
-    }
-    // Crossfade del segnale al confine (la componente sinusoidale è periodica).
-    for(let i=0;i<1024;i++){
-      const w=i/1024;
-      const v=out[i]*w+out[N-1024+i]*(1-w);
-      out[i]=v;out[N-1024+i]=v;
-    }
-    return buffer;
+  function nodeGain(value){const g=ctx.createGain();g.gain.value=value;return g;}
+  function tone(frequency=750,duration=.11,kind='triangle',level=.09){
+    if(muted||!ctx||ctx.state!=='running')return;
+    const now=ctx.currentTime,o=ctx.createOscillator(),g=nodeGain(.0001),end=now+Math.max(.065,duration);
+    o.type=kind;o.frequency.setValueAtTime(Math.max(35,frequency),now);
+    g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(Math.max(.002,level),now+.008);
+    g.gain.exponentialRampToValueAtTime(.0001,end);
+    o.connect(g);g.connect(comp);o.start(now);o.stop(end+.03);
+  }
+  function noiseBurst(duration=.11,level=.065,frequency=1200){
+    if(!ctx||muted||ctx.state!=='running')return;
+    const now=ctx.currentTime,n=Math.max(64,Math.floor(ctx.sampleRate*duration));
+    const buffer=ctx.createBuffer(1,n,ctx.sampleRate),data=buffer.getChannelData(0);
+    for(let i=0;i<n;i++)data[i]=Math.random()*2-1;
+    const src=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),g=nodeGain(.0001);
+    src.buffer=buffer;filter.type='bandpass';filter.frequency.value=frequency;filter.Q.value=.7;
+    g.gain.setValueAtTime(.0001,now);g.gain.linearRampToValueAtTime(level,now+.006);
+    g.gain.exponentialRampToValueAtTime(.0001,now+duration);
+    src.connect(filter);filter.connect(g);g.connect(comp);src.start(now);src.stop(now+duration);
   }
   function init(){
-    const A=window.AudioContext||window.webkitAudioContext;if(!A)return;
-    ctx=new A();
-    master=ctx.createGain();master.gain.value=muted?0:.58;
-    comp=ctx.createDynamicsCompressor();comp.threshold.value=-18;comp.knee.value=12;
-    comp.ratio.value=5;comp.attack.value=.005;comp.release.value=.16;
+    const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+    ctx=new AC();
+    master=nodeGain(muted?0:.7);comp=ctx.createDynamicsCompressor();
+    comp.threshold.value=-14;comp.knee.value=14;comp.ratio.value=4.5;comp.attack.value=.007;comp.release.value=.22;
     comp.connect(master);master.connect(ctx.destination);
-    engineGain=ctx.createGain();engineGain.gain.value=0;
-    engineFilter=ctx.createBiquadFilter();engineFilter.type='lowpass';engineFilter.frequency.value=1800;
-    engineGain.connect(engineFilter);engineFilter.connect(comp);
-    exhaust=ctx.createBufferSource();exhaust.buffer=texture(ctx,'exhaust');exhaust.loop=true;
-    const exhaustGain=ctx.createGain();exhaustGain.gain.value=.75;
-    exhaust.connect(exhaustGain);exhaustGain.connect(engineGain);exhaust.start();
-    intake=ctx.createBufferSource();intake.buffer=texture(ctx,'intake');intake.loop=true;
-    airFilter=ctx.createBiquadFilter();airFilter.type='bandpass';airFilter.frequency.value=1200;airFilter.Q.value=.65;
-    intakeGain=ctx.createGain();intakeGain.gain.value=.1;
-    intake.connect(airFilter);airFilter.connect(intakeGain);intakeGain.connect(engineGain);intake.start();
-    // Leggero fischio della trasmissione: quasi impercettibile al minimo.
-    whine=ctx.createOscillator();whine.type='triangle';whine.frequency.value=150;
-    whineGain=ctx.createGain();whineGain.gain.value=0;
-    whine.connect(whineGain);whineGain.connect(comp);whine.start();
+    engineGain=nodeGain(0);engineFilter=ctx.createBiquadFilter();engineFilter.type='lowpass';
+    engineFilter.frequency.value=3000;engineGain.connect(engineFilter);engineFilter.connect(comp);
+    // V6 quattro tempi = tre combustioni per giro. Piccola componente sovrapposta
+    // ai veri sample per conservare il timbro acuto del motore racing ad alto regime.
+    combustion=ctx.createOscillator();combustion.type='sawtooth';combustion.frequency.value=250;
+    combustionGain=nodeGain(0);const mids=ctx.createBiquadFilter();mids.type='bandpass';mids.frequency.value=1350;mids.Q.value=.65;
+    combustion.connect(mids);mids.connect(combustionGain);combustionGain.connect(engineGain);combustion.start();
+    // Aspirazione e vento filtrati, senza loop elettronico monotono.
+    const n=Math.floor(ctx.sampleRate*.8),buf=ctx.createBuffer(1,n,ctx.sampleRate),v=buf.getChannelData(0);
+    let seed=141219;for(let i=0;i<n;i++){seed=(Math.imul(seed,1664525)+1013904223)|0;v[i]=((seed>>>0)/2147483648)-1;}
+    air=ctx.createBufferSource();air.buffer=buf;air.loop=true;
+    airFilter=ctx.createBiquadFilter();airFilter.type='highpass';airFilter.frequency.value=1900;
+    airGain=nodeGain(.0);air.connect(airFilter);airFilter.connect(airGain);airGain.connect(engineGain);air.start();
+    whine=ctx.createOscillator();whine.type='triangle';whine.frequency.value=160;
+    whineGain=nodeGain(0);whine.connect(whineGain);whineGain.connect(comp);whine.start();
+    loadSamples();
+  }
+  async function loadSamples(){
+    if(loading||!ctx||typeof window.fetch!=='function')return;
+    loading=true;
+    try{
+      const buffers=await Promise.all([ENGINE_LOW,ENGINE_HIGH].map(async path=>{
+        const response=await window.fetch(path,{cache:'force-cache'});
+        if(!response.ok)throw new Error(`Motore non disponibile: ${response.status}`);
+        return ctx.decodeAudioData(await response.arrayBuffer());
+      }));
+      for(const [i,buffer] of buffers.entries()){
+        const src=ctx.createBufferSource(),gain=nodeGain(0);
+        src.buffer=buffer;src.loop=true;
+        src.connect(gain);gain.connect(engineGain);src.start();
+        samples.push({src,gain,base:i===0?6100:8100});
+      }
+      samplesReady=true;
+    }catch(_){
+      // Fallback sonoro se il browser non riesce a decodificare uno dei WAV.
+      samplesReady=false;
+    }
   }
   function unlock(){
     if(muted)return;
@@ -80,58 +86,46 @@ export function makeRaceAudio(){
   function toggle(){
     muted=!muted;try{localStorage.setItem('gridline_muted',muted?'1':'0');}catch(_){}
     if(!muted)unlock();
-    if(ctx&&master)master.gain.setTargetAtTime(muted?0:.58,ctx.currentTime,.03);
+    if(ctx&&master)master.gain.setTargetAtTime(muted?0:.7,ctx.currentTime,.025);
     return !muted;
   }
-  function tone(frequency=750,duration=.11,kind='triangle',level=.10){
-    if(muted||!ctx||ctx.state!=='running')return;
-    const now=ctx.currentTime,o=ctx.createOscillator(),g=ctx.createGain();
-    o.type=kind;o.frequency.setValueAtTime(Math.max(40,frequency),now);
-    g.gain.setValueAtTime(.0001,now);g.gain.exponentialRampToValueAtTime(Math.max(.003,level),now+.012);
-    g.gain.exponentialRampToValueAtTime(.0001,now+Math.max(.06,duration));
-    o.connect(g);g.connect(comp);o.start(now);o.stop(now+Math.max(.06,duration)+.04);
-  }
-  function noiseBurst(duration=.14,level=.14,cutoff=1400){
-    if(muted||!ctx||ctx.state!=='running')return;
-    const now=ctx.currentTime,N=Math.ceil(ctx.sampleRate*duration),buffer=ctx.createBuffer(1,N,ctx.sampleRate);
-    const out=buffer.getChannelData(0);for(let i=0;i<N;i++)out[i]=Math.random()*2-1;
-    const node=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
-    node.buffer=buffer;filter.type='bandpass';filter.frequency.value=cutoff;filter.Q.value=.7;
-    gain.gain.setValueAtTime(.0001,now);gain.gain.linearRampToValueAtTime(level,now+.009);
-    gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
-    node.connect(filter);filter.connect(gain);gain.connect(comp);node.start(now);node.stop(now+duration);
-  }
   function gearClack(direction){
-    // Scatto meccanico + breve sfiato della valvola + interruzione della coppia.
-    noiseBurst(.11,.075,direction>0?1500:1050);
-    tone(direction>0?165:240,.085,'triangle',.055);
+    // Molto breve: il momento importante e' il calo reale di RPM nel motore.
+    noiseBurst(direction>0?.067:.078,direction>0?.080:.063,direction>0?2100:1500);
+    if(direction<0)tone(245,.065,'triangle',.033); // blip di scalata
   }
-  function hit(){noiseBurst(.14,.16,420);tone(75,.11,'triangle',.09);}
-  function finish(){tone(660,.17);setTimeout(()=>tone(880,.22),160);setTimeout(()=>tone(1180,.27),335);}
-  function update(options={}){
-    if(!ctx||!engineGain||!exhaust||!intake||!whine)return;
-    const {speed=0,gas=false,brake=false,racing=false,offroad=false,gear=1,rpm,shiftSeq=0}=options;
-    if(ctx.state!=='running')return;
-    const now=ctx.currentTime,v=clamp(Math.abs(speed)/438,0,1);
-    const currentRpm=clamp(Number.isFinite(rpm)&&rpm>1000?rpm:rpmForSpeed(gear,speed,gas,brake),2800,12200);
-    const pitch=clamp(currentRpm/6000,.45,2.08);
-    const throttle=gas&&!brake?1:0;
-    const engaged=racing&&!muted;
-    if(engaged&&lastGear!==null&&lastGear!==gear&&lastShiftSeq!==shiftSeq){
-      lastShiftAt=now;gearClack(gear>lastGear?1:-1);
+  function hit(){noiseBurst(.15,.12,480);tone(82,.12,'triangle',.07);}
+  function finish(){tone(650,.15);setTimeout(()=>tone(830,.19),155);setTimeout(()=>tone(1040,.25),330);}
+  function update(o={}){
+    if(!ctx||ctx.state!=='running')return;
+    const {speed=0,gas=false,brake=false,racing=false,offroad=false,gear=1,rpm,shiftSeq=0}=o;
+    const t=ctx.currentTime;
+    const actualRpm=clamp(Number.isFinite(rpm)&&rpm>1000?rpm:rpmForSpeed(gear,speed,gas,brake),IDLE_RPM,REDLINE_RPM);
+    const throttle=gas&&!brake?1:0,load=racing&&!muted;
+    const shift=lastShiftSeq!==null&&shiftSeq!==lastShiftSeq;
+    if(load&&shift){
+      lastShiftAt=t;lastDirection=gear>(lastGear||gear)?1:-1;gearClack(lastDirection);
     }
-    const shiftEnvelope=clamp((now-lastShiftAt-.045)/.16,0,1);
-    const torqueCut=now-lastShiftAt<.045?.27:.27+.73*shiftEnvelope;
-    exhaust.playbackRate.setTargetAtTime(pitch,now,.042);
-    intake.playbackRate.setTargetAtTime(pitch*1.02,now,.06);
-    whine.frequency.setTargetAtTime(145+v*510+(gear-1)*42,now,.055);
-    engineFilter.frequency.setTargetAtTime(1100+v*3100+throttle*1150,now,.055);
-    airFilter.frequency.setTargetAtTime(900+v*2600,now,.08);
-    intakeGain.gain.setTargetAtTime(.10+v*.16+throttle*.12,now,.08);
-    const gain=engaged?(offroad?.7:1)*(.26+v*.24+throttle*.14)*torqueCut:0;
-    engineGain.gain.setTargetAtTime(gain,now,.07);
-    whineGain.gain.setTargetAtTime(engaged?.005+v*.018:0,now,.09);
-    lastGear=gear;lastShiftSeq=shiftSeq;lastGas=!!gas;lastUpdateAt=now;
+    lastGear=gear;lastShiftSeq=shiftSeq;
+    const elapsed=t-lastShiftAt;
+    const cut=elapsed<.085?.16:elapsed<.23?.16+.84*((elapsed-.085)/.145):1;
+    if(samplesReady){
+      const hi=clamp((actualRpm-6200)/5700,0,1);
+      for(const [i,s] of samples.entries()){
+        const rate=clamp(actualRpm/s.base, .58,2.6);
+        s.src.playbackRate.setTargetAtTime(rate,t,.024);
+        s.gain.gain.setTargetAtTime((i===0?1-hi*.8:hi*.87)*.64,t,.055);
+      }
+    }
+    const fallback=samplesReady?.015:.27;
+    combustion.frequency.setTargetAtTime(actualRpm/20,t,.035);
+    combustionGain.gain.setTargetAtTime(fallback*(.45+.55*throttle),t,.045);
+    airFilter.frequency.setTargetAtTime(1400+actualRpm*.31,t,.08);
+    airGain.gain.setTargetAtTime(.012+throttle*.016+Math.abs(speed)/438*.014,t,.09);
+    whine.frequency.setTargetAtTime(120+(actualRpm/30),t,.04);
+    whineGain.gain.setTargetAtTime(load?.007:0,t,.06);
+    engineFilter.frequency.setTargetAtTime(1900+actualRpm*.33+throttle*700,t,.06);
+    engineGain.gain.setTargetAtTime(load?(offroad?.78:1)*(.34+.26*throttle)*cut:0,t,elapsed<.23?.012:.055);
   }
   return {unlock,tone,hit,finish,update,toggle,isOn};
 }

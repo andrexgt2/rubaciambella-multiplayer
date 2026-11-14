@@ -1,22 +1,27 @@
-// Trasmissione automatica racing: una logica, condivisa tra server e test.
-// Velocità in unità del mondo di gioco; RPM visualizzati/audio sono simulati.
-export const MAX_GEAR=6;
-export const UPSHIFT_AT=[70,128,195,269,354];
-export const DOWNSHIFT_BELOW=[0,43,94,155,220,296];
-export const GEAR_MIN_SPEED=[0,38,92,151,212,288];
-export const GEAR_TOP_SPEED=[70,128,195,269,354,448];
+// GRIDLINE GP: cambio sequenziale simulato a NOVE rapporti avanti.
+// E' una scelta di gameplay F1-inspired (le monoposto F1 reali hanno 8 avanti + R).
+// Tutta la logica e' deterministica e condivisa tra Worker e browser.
+export const MAX_GEAR=9;
+export const IDLE_RPM=5100;
+export const REDLINE_RPM=13000;
+// Velocita' nel sistema fisico del gioco (massimo in pista 438).
+export const UPSHIFT_AT=[42,83,126,174,223,271,321,378];
+export const DOWNSHIFT_BELOW=[0,28,66,106,153,201,249,299,354];
+export const GEAR_MIN_SPEED=[0,29,68,109,154,204,253,303,359];
+export const GEAR_TOP_SPEED=[47,91,136,186,236,285,338,397,454];
 const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
 export function nextGear(gear,speed,canShift=true){
-  let g=clamp(Math.round(gear)||1,1,MAX_GEAR);
+  const g=clamp(Math.round(gear)||1,1,MAX_GEAR);
   if(!canShift)return g;
-  if(speed>=UPSHIFT_AT[g-1]&&g<MAX_GEAR)return g+1;
-  if(g>1&&speed<DOWNSHIFT_BELOW[g-1])return g-1;
+  const v=Math.max(0,Number(speed)||0);
+  if(g<MAX_GEAR&&v>=UPSHIFT_AT[g-1])return g+1;
+  if(g>1&&v<DOWNSHIFT_BELOW[g-1])return g-1;
   return g;
 }
 export function rpmForSpeed(gear,speed,gas=false,brake=false){
   const g=clamp(Math.round(gear)||1,1,MAX_GEAR);
-  const value=clamp(Math.abs(speed),0,450);
-  const t=clamp((value-GEAR_MIN_SPEED[g-1])/(GEAR_TOP_SPEED[g-1]-GEAR_MIN_SPEED[g-1]),0,1);
-  // Un V6 ad alto regime: il rapporto superiore fa scendere i giri.
-  return Math.round(clamp(3300+8300*t+(gas&&!brake?320:0),3000,11900));
+  const v=clamp(Math.max(0,Number(speed)||0),0,454);
+  const t=clamp((v-GEAR_MIN_SPEED[g-1])/(GEAR_TOP_SPEED[g-1]-GEAR_MIN_SPEED[g-1]),0,1);
+  const usable=g===1?t:.35+.65*t;
+  return Math.round(clamp(IDLE_RPM+7600*usable+(gas&&!brake?140:0),IDLE_RPM,REDLINE_RPM));
 }

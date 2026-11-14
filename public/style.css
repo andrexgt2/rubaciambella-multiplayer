@@ -49,3 +49,7 @@
 .rpm-bar span{display:block;width:var(--rev,0%);height:100%;background:linear-gradient(90deg,#4ddc9a 0%,#e7f657 68%,#ff665b 100%);transition:width .12s}
 @media(pointer:coarse){.gear-unit{min-width:24px;gap:3px}.gear-unit>strong{font-size:28px}.rpm-bar{width:25px;height:3px}}
 @media(pointer:coarse) and (orientation:landscape) and (max-height:340px){.gear-unit>strong{font-size:24px}}
+
+/* V8: identificazione immediata del cambio a nove rapporti. */
+.gear-unit{position:relative;padding-right:12px}
+.gear-count{position:absolute;right:0;top:0;color:#a4b9b4;font-size:8px;font-weight:900}
