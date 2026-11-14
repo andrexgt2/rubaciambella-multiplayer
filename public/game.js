@@ -26,6 +26,7 @@ function send(type,payload={}){
 }
 function resetToJoin(){
   playerId=null;gameState=null;connected=false;
+  document.body.classList.remove('game-active');
   $('overlay').classList.remove('hidden');
   $('joinPanel').classList.remove('hidden');
   $('lobbyPanel').classList.add('hidden');
@@ -106,22 +107,79 @@ document.addEventListener('keydown',e=>{
   if(name){e.preventDefault();keys[name]=true;}
 });
 document.addEventListener('keyup',e=>{const name=keyName[e.code];if(name){e.preventDefault();keys[name]=false;}});
-window.addEventListener('blur',()=>{for(const id of padIds)keys[id]=false;});
+// Il joystick virtuale usa Pointer Events: un dito guida, l'altro attiva turbo o clacson.
+// Su Safari iOS impediamo anche la selezione di testo, il menu di pressione lunga e lo scroll.
+const controls=$('touchControls'),stick=$('joystick'),knob=$('joystickKnob');
 const pointers=new Map();
+let stickPointer=null;
+function clearStick(){
+  stickPointer=null;
+  keys.up=false;keys.down=false;keys.left=false;keys.right=false;
+  knob.style.transform='translate(0px, 0px)';
+  stick.classList.remove('engaged');
+}
+function moveStick(e){
+  const rect=stick.getBoundingClientRect();
+  const radius=Math.min(rect.width,rect.height)*.31;
+  const x=e.clientX-(rect.left+rect.width/2),y=e.clientY-(rect.top+rect.height/2);
+  const length=Math.hypot(x,y),ratio=length>radius?radius/length:1;
+  const nx=x*ratio/radius,ny=y*ratio/radius;
+  knob.style.transform=`translate(${(nx*radius).toFixed(1)}px, ${(ny*radius).toFixed(1)}px)`;
+  const threshold=.24;
+  keys.left=nx< -threshold;
+  keys.right=nx>threshold;
+  keys.down=ny>.38;
+  // In diagonale sterzi e acceleri con lo stesso pollice.
+  keys.up=ny<-.23||(Math.abs(nx)>.40&&ny<=.24);
+}
+stick.addEventListener('pointerdown',e=>{
+  if(stickPointer!==null)return;
+  e.preventDefault();
+  stickPointer=e.pointerId;
+  try{stick.setPointerCapture(e.pointerId);}catch(_){}
+  stick.classList.add('engaged');
+  moveStick(e);
+});
+stick.addEventListener('pointermove',e=>{
+  if(e.pointerId!==stickPointer)return;
+  e.preventDefault();moveStick(e);
+});
+function releaseStick(e){
+  if(e.pointerId!==stickPointer)return;
+  e.preventDefault();clearStick();
+}
+for(const eventName of ['pointerup','pointercancel','lostpointercapture'])stick.addEventListener(eventName,releaseStick);
 for(const button of document.querySelectorAll('[data-control]')){
   const control=button.dataset.control;
   button.addEventListener('pointerdown',e=>{
-    e.preventDefault();button.setPointerCapture(e.pointerId);
-    pointers.set(e.pointerId,{control,button});keys[control]=true;button.classList.add('pressed');
+    e.preventDefault();
+    try{button.setPointerCapture(e.pointerId);}catch(_){}
+    pointers.set(e.pointerId,{control,button});keys[control]=true;
+    button.classList.add('pressed');
   });
   const up=e=>{
     const pointer=pointers.get(e.pointerId);if(!pointer)return;
-    pointers.delete(e.pointerId);
+    e.preventDefault();pointers.delete(e.pointerId);
     keys[pointer.control]=[...pointers.values()].some(v=>v.control===pointer.control);
     pointer.button.classList.toggle('pressed',keys[pointer.control]);
   };
-  button.addEventListener('pointerup',up);button.addEventListener('pointercancel',up);button.addEventListener('lostpointercapture',up);
+  for(const eventName of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(eventName,up);
 }
+// touchstart e touchmove esplicitamente non passivi: evitano il menu nativo di iOS.
+for(const eventName of ['touchstart','touchmove']){
+  controls.addEventListener(eventName,e=>{if(e.cancelable)e.preventDefault();},{passive:false});
+}
+for(const eventName of ['contextmenu','selectstart','dragstart']){
+  controls.addEventListener(eventName,e=>e.preventDefault());
+}
+function releaseControls(){
+  clearStick();pointers.clear();
+  for(const id of padIds)keys[id]=false;
+  for(const button of controls.querySelectorAll('.pressed'))button.classList.remove('pressed');
+}
+window.addEventListener('blur',releaseControls);
+window.addEventListener('pagehide',releaseControls);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseControls();});
 setInterval(()=>{if(connected&&playerId)send('input',{keys});},50);
 function hms(t){const s=Math.ceil(Math.max(0,t));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
 function setAbility(prefix,readyAt,now,cd){
@@ -132,6 +190,7 @@ function setAbility(prefix,readyAt,now,cd){
 }
 function updateUI(){
   const s=gameState;if(!s||!playerId)return;
+  document.body.classList.toggle('game-active',s.phase==='playing'||s.phase==='countdown');
   $('overlay').classList.toggle('hidden',s.phase==='playing'||s.phase==='countdown');
   $('joinPanel').classList.add('hidden');
   $('lobbyPanel').classList.toggle('hidden',s.phase!=='lobby');

@@ -4,9 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0e1023">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="description" content="Rubaciambella: il party game di macchinine da giocare con gli amici in multiplayer.">
   <title>RUBACIAMBELLA · Microauto, maxi caos</title>
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/style.css?v=touch-2">
 </head>
 <body>
 <div class="app">
@@ -41,7 +43,22 @@
           <div id="countdown" class="countdown hidden" aria-live="polite">3</div>
           <div id="frenzy" class="frenzy hidden">🔥 ULTIMI 20 SECONDI · PUNTI X2 🔥</div>
         </div>
-        <div class="touch-controls" id="touchControls"><div class="pad"><div></div><button type="button" data-control="up" aria-label="Accelera">▲</button><div></div><button type="button" data-control="left" aria-label="Sterza a sinistra">◀</button><button type="button" data-control="down" aria-label="Retromarcia">▼</button><button type="button" data-control="right" aria-label="Sterza a destra">▶</button></div><div class="action-pad"><button type="button" data-control="boost" class="boost-btn">⚡<small>TURBO</small></button><button type="button" data-control="blast" class="blast-btn">📣<small>BIP!</small></button></div></div>
+        <div class="touch-controls" id="touchControls" aria-label="Comandi touch">
+          <div class="joystick-wrap">
+            <div class="joystick" id="joystick" role="group" aria-label="Joystick: trascina verso l'alto per accelerare, lateralmente per sterzare o verso il basso per andare in retromarcia">
+              <span class="joystick-direction up" aria-hidden="true">▲</span>
+              <span class="joystick-direction left" aria-hidden="true">◀</span>
+              <span class="joystick-direction right" aria-hidden="true">▶</span>
+              <span class="joystick-direction down" aria-hidden="true">▼</span>
+              <div class="joystick-knob" id="joystickKnob" aria-hidden="true"><span>✦</span></div>
+            </div>
+            <div class="joystick-caption">TRASCINA PER GUIDARE</div>
+          </div>
+          <div class="action-pad">
+            <button type="button" data-control="boost" class="boost-btn" aria-label="Attiva il turbo">⚡<small>TURBO</small></button>
+            <button type="button" data-control="blast" class="blast-btn" aria-label="Usa il clacson d'urto">📣<small>BIP!</small></button>
+          </div>
+        </div>
         <div class="arena-bottom"><span><span class="circle-key">W</span><span class="circle-key">A</span><span class="circle-key">S</span><span class="circle-key">D</span> GUIDA</span><span><span class="rect-key">SHIFT</span> TURBO</span><span><span class="rect-key">SPAZIO</span> CLACSON</span><span class="mobile-tip">SU TELEFONO USA I COMANDI TOUCH</span></div>
       </section>
       <aside class="sidebar">
@@ -53,6 +70,6 @@
     <footer class="footer"><span>FATTO PER LE SERATE CON GLI AMICI, NON PER I PROFESSIONISTI.</span><span>🍩 UN'IDEA ASSURDAMENTE SERIA</span></footer>
   </main>
 </div>
-<script src="/game.js"></script>
+<script src="/game.js?v=touch-2"></script>
 </body>
 </html>

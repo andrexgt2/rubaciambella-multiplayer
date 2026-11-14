@@ -11,3 +11,97 @@
 @media (max-width:720px){
   .canvas-wrap:has(.overlay:not(.hidden)){min-height:475px}
 }
+
+/* Mobile gamepad: niente selezione/callout/scroll durante un comando, incluso Safari iOS. */
+.touch-controls,
+.touch-controls *,
+.touch-controls *::before,
+.touch-controls *::after {
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:none;
+  overscroll-behavior:contain;
+}
+.touch-controls {align-items:center;gap:12px;}
+.joystick-wrap{display:flex;flex-direction:column;align-items:center;gap:7px;flex-shrink:0}
+.joystick{
+  --stick-size:144px;
+  width:var(--stick-size);height:var(--stick-size);
+  position:relative;border-radius:50%;
+  border:2px solid #7c88a8;
+  background:radial-gradient(circle at 50% 50%,#33496d 0%,#253451 47%,#15243f 100%);
+  box-shadow:inset 0 0 0 10px #121d35,0 5px 22px #090f2180;
+  cursor:grab;
+}
+.joystick.engaged{border-color:#ffd85d;box-shadow:inset 0 0 0 10px #121d35,0 0 18px #ffd85d4d;cursor:grabbing}
+.joystick-direction{position:absolute;color:#8696ba;font-size:15px;font-weight:900;line-height:1;pointer-events:none}
+.joystick-direction.up{top:11px;left:50%;transform:translateX(-50%)}
+.joystick-direction.down{bottom:11px;left:50%;transform:translateX(-50%)}
+.joystick-direction.left{top:50%;left:11px;transform:translateY(-50%)}
+.joystick-direction.right{top:50%;right:11px;transform:translateY(-50%)}
+.joystick-knob{
+  position:absolute;top:50%;left:50%;width:62px;height:62px;margin:-31px 0 0 -31px;
+  display:grid;place-items:center;border-radius:50%;
+  border:3px solid #ffe792;background:linear-gradient(150deg,#ffe184,#eaa83d);
+  box-shadow:0 5px 12px #0008, inset 0 3px 5px #ffffff90;
+  color:#2b2c40;font-size:25px;pointer-events:none;
+  will-change:transform;
+}
+.joystick-caption{font-size:9px;letter-spacing:1.1px;font-weight:900;color:#cbd4ef;text-align:center}
+.action-pad{display:flex;align-items:center;gap:9px}
+.action-pad button{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  min-width:60px;width:clamp(60px,18vw,76px);height:90px;
+  padding:6px 3px;border:2px solid #65708f;border-radius:16px;
+  background:#2b3554;color:#f1f2ff;font-size:29px;
+  box-shadow:0 5px 0 #0a1021;
+  cursor:pointer;
+}
+.action-pad button small{font-size:10px;font-weight:900;letter-spacing:.5px}
+.action-pad button.pressed{background:#ffd85d;color:#1c2036;transform:translateY(3px);box-shadow:0 2px 0 #0a1021}
+.action-pad .boost-btn{border-color:#bfa052}
+.action-pad .blast-btn{border-color:#ba6584}
+@media(max-width:720px){
+  .touch-controls{padding:10px 12px calc(10px + env(safe-area-inset-bottom));justify-content:space-between;}
+  .joystick{--stick-size:clamp(128px,37vw,152px)}
+  .action-pad button{width:clamp(58px,17vw,74px);height:clamp(75px,23vw,92px)}
+  /* In partita la pista e i comandi occupano tutta la schermata, come un'app. */
+  body.game-active{height:100dvh;overflow:hidden}
+  body.game-active .app{height:100dvh;max-width:none;padding:0}
+  body.game-active .header,body.game-active .hero,body.game-active .sidebar,
+  body.game-active .footer{display:none}
+  body.game-active .game-layout{display:block;height:100dvh}
+  body.game-active .arena-card{height:100dvh;border:0;border-radius:0;display:flex;flex-direction:column;box-shadow:none}
+  body.game-active .arena-topbar{flex-shrink:0;height:55px}
+  body.game-active .canvas-wrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+  body.game-active .canvas-wrap canvas{width:100%;max-height:100%;object-fit:contain}
+  body.game-active .touch-controls{flex-shrink:0;min-height:185px}
+}
+@media(max-width:360px){
+  .touch-controls{gap:6px;padding-left:8px;padding-right:8px}
+  .joystick{--stick-size:124px}
+  .action-pad{gap:6px}
+  .action-pad button{min-width:54px;width:56px;height:74px}
+  .joystick-caption{font-size:8px}
+}
+/* Touchscreen anche in orizzontale: i comandi non devono sparire a 721px. */
+@media(min-width:721px) and (pointer:coarse){
+  body.game-active{height:100dvh;overflow:hidden}
+  body.game-active .app{height:100dvh;max-width:none;padding:0}
+  body.game-active .header,body.game-active .hero,body.game-active .sidebar,body.game-active .footer{display:none}
+  body.game-active .game-layout{display:block;height:100dvh}
+  body.game-active .arena-card{position:relative;height:100dvh;display:flex;flex-direction:column;border:0;border-radius:0}
+  body.game-active .arena-topbar{flex-shrink:0}
+  body.game-active .canvas-wrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+  body.game-active .canvas-wrap canvas{width:100%;max-height:100%;object-fit:contain}
+  body.game-active .touch-controls{display:flex;position:absolute;bottom:0;left:0;right:0;z-index:4;justify-content:space-between;background:transparent;border:0;pointer-events:none;padding:10px max(18px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-right))}
+  body.game-active .joystick-wrap,body.game-active .action-pad{pointer-events:auto}
+  body.game-active .joystick{--stick-size:128px}
+  body.game-active .action-pad button{width:74px;height:80px}
+}
+@media(min-width:721px) and (pointer:coarse){
+  body.game-active .arena-bottom{display:none}
+  body.game-active .joystick-caption{display:none}
+}

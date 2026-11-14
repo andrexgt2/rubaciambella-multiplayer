@@ -35,3 +35,14 @@ Apri il sito, inserisci il nome da pilota, crea la stanza e usa **COPIA LINK** p
 - Durable Objects SQLite sono disponibili sul piano gratuito, con limiti di risorse e richieste.
 
 Fonti: https://developers.cloudflare.com/workers/ci-cd/builds/ e https://developers.cloudflare.com/workers/ci-cd/builds/configuration/
+
+## Comandi mobile (versione touch)
+
+Su telefono la partita si apre in una schermata dedicata senza scorrimento della pagina.
+Trascina il **joystick a sinistra** verso l'alto per accelerare, verso destra/sinistra
+per sterzare (anche insieme) o verso il basso per fare retromarcia. Usa il pollice
+destro per il **TURBO** e il **BIP!** contemporaneamente alla guida.
+
+Durante la pressione dei controlli sono disattivati lo scroll e la selezione del testo
+(incluso il menu di selezione su Safari iOS). Su computer rimangono disponibili
+WASD o frecce, Shift e barra spaziatrice.
