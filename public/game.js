@@ -334,13 +334,21 @@ function paintSurface(){
     sc.fillStyle='#e9f65b';sc.fillRect(-4,-ROAD_WIDTH/2-20,8,18);sc.fillRect(-4,ROAD_WIDTH/2+2,8,18);sc.restore();}
 }
 paintSurface();
+let lastLobbyPreviewId=null;
 function activateTrack(id){
   const next=getTrack(id);
-  drawTrackPreview($('lobbyTrackPreview'),next);
-  $('lobbyTrackPreview').setAttribute('aria-label','Mappa di '+trackName(next.id));
-  $('trackSelect').value=next.id;
-  renderChoicePreview(next.id);
-  $('trackChoice').classList.remove('joining');
+  // Gli snapshot multiplayer arrivano ogni 100 ms: la miniatura si ridisegna
+  // solo quando cambia pista, evitando lavoro inutile durante la corsa.
+  if(lastLobbyPreviewId!==next.id){
+    drawTrackPreview($('lobbyTrackPreview'),next);
+    $('lobbyTrackPreview').setAttribute('aria-label','Mappa di '+trackName(next.id));
+    lastLobbyPreviewId=next.id;
+  }
+  if($('trackSelect').value!==next.id||$('trackChoice').classList.contains('joining')){
+    $('trackSelect').value=next.id;
+    renderChoicePreview(next.id);
+    $('trackChoice').classList.remove('joining');
+  }
   if(next===track)return;
   track=next;CENTERLINE=next.centerline;TRACK_LENGTH=next.length;
   pointAt=next.pointAt;closestTrack=next.closestTrack;
