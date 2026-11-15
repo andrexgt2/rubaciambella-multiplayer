@@ -51,3 +51,33 @@
 .rpm-bar span{display:block;width:var(--rev,0%);height:100%;background:linear-gradient(90deg,#4ddc9a 0%,#e7f657 68%,#ff665b 100%);transition:width .12s linear}
 @media(pointer:coarse){.rpm-unit{min-width:45px}.rpm-unit>strong{font-size:24px}.rpm-unit>small{font-size:7px}.rpm-bar{width:40px;height:3px}}
 @media(pointer:coarse) and (orientation:landscape) and (max-height:340px){.rpm-unit>strong{font-size:21px}}
+
+/* v12 · Scelta del circuito prima di creare la stanza. */
+.panel select{width:100%;height:43px;border:1px solid #435b5d;border-radius:5px;
+  background:#0a131b;color:#f6f8f3;padding:0 12px;font:700 13px var(--font);
+  cursor:pointer;appearance:auto}
+.panel select:focus-visible{outline:2px solid var(--acid)}
+.panel select:disabled{opacity:.55;cursor:not-allowed}
+.panel .track-help{font-size:10px;line-height:1.35;margin:7px 0 0;color:#9aafa9}
+.lobby-circuit{font:800 13px var(--display);letter-spacing:1.2px;color:var(--acid);margin-bottom:10px}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:460px){
+  .panel select{height:37px}
+  .panel .track-help{margin:3px 0 0}
+}
+
+/* v12 · Miniature delle piste generate dalla stessa geometria della gara. */
+.track-choice{display:flex;align-items:stretch;gap:9px;width:100%;min-width:0}
+.track-choice select{flex:1 1 auto;width:0;min-width:0;height:auto;min-height:68px}
+.track-choice canvas{width:128px;height:auto;aspect-ratio:25/13;align-self:center;flex:0 0 128px;
+  border:1px solid #668b6c;border-radius:7px;display:block;background:#0c1d23}
+.track-choice.joining canvas{opacity:.42;filter:grayscale(.8)}
+.track-preview-caption{color:var(--acid);font:800 11px var(--display);letter-spacing:1px;
+  margin:5px 0 0;min-height:13px}
+.lobby-track-preview{display:block;width:min(100%,320px);height:auto;aspect-ratio:24/7;
+  background:#0c1d23;border:1px solid #526d6a;border-radius:6px;margin:5px 0 8px}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:460px){
+  .track-choice select{min-height:52px}
+  .track-choice canvas{width:100px;height:auto;flex-basis:100px}
+  .track-preview-caption{margin-top:2px;font-size:10px}
+  .lobby-track-preview{width:min(100%,200px);height:auto}
+}

@@ -1,5 +1,5 @@
 import {WORLD, ROAD_WIDTH, TRACK_LENGTH, LAP_COUNT, RACE_LIMIT_MS, closestTrack,
-  pointAt, forwardDelta, checkpointS} from '../public/track.js';
+  pointAt, forwardDelta, checkpointS, getTrack, sanitizeTrackId} from '../public/track.js';
 import {IDLE_RPM,targetRPM,advanceRPM,TOP_SPEED} from '../public/powertrain.js';
 
 export const LIMIT=8;
@@ -11,28 +11,29 @@ export const safeInput=data=>({
   gas:data?.gas===true||data?.up===true,
   brake:data?.brake===true||data?.down===true
 });
-export function makeRoom(code){return {version:5,code,hostId:null,phase:'lobby',players:new Map(),
+export function makeRoom(code,trackId='creste'){return {version:5,code,trackId:sanitizeTrackId(trackId),hostId:null,phase:'lobby',players:new Map(),
   countdownEnds:0,startedAt:0,raceEnds:0,resultsAt:0,finishedOrder:[]};}
-export function spawn(p,index=0){
+export function spawn(p,index=0,geometry=getTrack('creste')){
   // Griglia reale a due colonne, con il muso diretto verso il primo rettilineo.
   const row=Math.floor(index/2),lane=index%2===0?-37:37;
-  const pos=pointAt(260-row*68);
+  const pos=geometry.pointAt(260-row*68);
   p.x=pos.x-pos.ty*lane;p.y=pos.y+pos.tx*lane;p.angle=pos.angle;
   p.vx=0;p.vy=0;p.speed=0;p.input=safeInput({});p.lastInputAt=0;
-  p.laps=0;p.nextGate=1;p.progress=closestTrack(p.x,p.y).s;
+  p.laps=0;p.nextGate=1;p.progress=geometry.closestTrack(p.x,p.y).s;
   p.lapStartedAt=0;p.bestLap=0;p.lastLap=0;p.finishedAt=0;p.recordedLaps=0;
   p.spectator=false;p.offroad=false;p.hits=0;
   p.rpm=IDLE_RPM;
 }
 export function startMatch(room,now=Date.now()){
   const players=[...room.players.values()];
-  players.forEach((p,i)=>spawn(p,i));
+  const geometry=getTrack(room.trackId);
+  players.forEach((p,i)=>spawn(p,i,geometry));
   room.phase='countdown';room.countdownEnds=now+4000;room.startedAt=0;
   room.raceEnds=0;room.resultsAt=0;room.finishedOrder=[];
 }
-function movePlayer(p,dt,now){
+function movePlayer(p,dt,now,geometry){
   const input=(now-(p.lastInputAt||0)<800)?p.input:safeInput({});
-  const before=closestTrack(p.x,p.y);
+  const before=geometry.closestTrack(p.x,p.y);
   p.offroad=before.distance>ROAD_WIDTH*.5-9;
   const gripping=p.offroad?.55:1;
   // Modello continuo di trazione: coppia decrescente e resistenza quadratica dell'aria.
@@ -60,7 +61,7 @@ function movePlayer(p,dt,now){
   const smoothing=1-Math.exp(-grip*dt);
   p.vx+=(desiredVX-p.vx)*smoothing;p.vy+=(desiredVY-p.vy)*smoothing;
   p.x+=p.vx*dt;p.y+=p.vy*dt;
-  const nearest=closestTrack(p.x,p.y),barrier=ROAD_WIDTH*.5+33;
+  const nearest=geometry.closestTrack(p.x,p.y),barrier=ROAD_WIDTH*.5+33;
   if(nearest.distance>barrier){
     const nx=(p.x-nearest.x)/(nearest.distance||1),ny=(p.y-nearest.y)/(nearest.distance||1);
     p.x=nearest.x+nx*barrier;p.y=nearest.y+ny*barrier;
@@ -69,19 +70,19 @@ function movePlayer(p,dt,now){
     p.speed*=.74;p.hits++;
   }
   p.x=clamp(p.x,40,WORLD.width-40);p.y=clamp(p.y,40,WORLD.height-40);
-  const track=closestTrack(p.x,p.y);
-  const delta=forwardDelta(p.progress,track.s);
+  const track=geometry.closestTrack(p.x,p.y);
+  const delta=geometry.forwardDelta(p.progress,track.s);
   if(track.distance<=ROAD_WIDTH*.5+4&&delta>0&&delta<Math.max(70,Math.abs(p.speed)*dt*2.3)){
-    advanceGates(p,track.s,now);
+    advanceGates(p,track.s,now,geometry);
   }else p.progress=track.s;
 }
 // Avanzamento dei soli checkpoint in ordine. Si chiama dal motore dopo la validazione
 // della distanza fisica percorsa; separato per testare ogni attraversamento di giro.
-export function advanceGates(p,newProgress,now){
-  const delta=forwardDelta(p.progress,newProgress);
-  if(delta>0&&delta<TRACK_LENGTH/8){
-    const target=checkpointS[p.nextGate-1];
-    const distanceToGate=(target-p.progress+TRACK_LENGTH)%TRACK_LENGTH;
+export function advanceGates(p,newProgress,now,geometry=getTrack('creste')){
+  const delta=geometry.forwardDelta(p.progress,newProgress);
+  if(delta>0&&delta<geometry.length/8){
+    const target=geometry.checkpointS[p.nextGate-1];
+    const distanceToGate=(target-p.progress+geometry.length)%geometry.length;
     if(distanceToGate<=delta+1){
       if(p.nextGate===4){
         p.laps++;
@@ -108,13 +109,14 @@ function collisions(players){
   }
 }
 export function standings(room){
+  const length=getTrack(room.trackId).length;
   const racers=[...room.players.values()].filter(p=>!p.spectator);
   const value=p=>{
     if(p.finishedAt)return 1e9-p.finishedAt/1e10;
-    const base=(p.nextGate-1)*TRACK_LENGTH/4;
-    const max=(p.nextGate)*TRACK_LENGTH/4;
-    const local=(p.nextGate===1&&p.progress>TRACK_LENGTH*.85)?0:clamp(p.progress,base,max);
-    return p.laps*TRACK_LENGTH+local;
+    const base=(p.nextGate-1)*length/4;
+    const max=(p.nextGate)*length/4;
+    const local=(p.nextGate===1&&p.progress>length*.85)?0:clamp(p.progress,base,max);
+    return p.laps*length+local;
   };
   return racers.sort((a,b)=>{
     if(a.finishedAt&&b.finishedAt)return a.finishedAt-b.finishedAt;
@@ -131,7 +133,8 @@ export function tick(room,now,dt){
   }
   if(room.phase!=='racing')return;
   const racers=[...room.players.values()].filter(p=>!p.spectator);
-  for(const p of racers){if(!p.finishedAt)movePlayer(p,Math.min(dt,.07),now);}
+  const geometry=getTrack(room.trackId);
+  for(const p of racers){if(!p.finishedAt)movePlayer(p,Math.min(dt,.07),now,geometry);}
   collisions(racers);
   room.finishedOrder=standings(room).filter(p=>p.finishedAt).map(p=>p.id);
   if(now>=room.raceEnds||(racers.length>0&&racers.every(p=>p.finishedAt))){
@@ -140,7 +143,7 @@ export function tick(room,now,dt){
 }
 export function snapshot(room,now=Date.now()){
   const ranked=standings(room);
-  return {code:room.code,hostId:room.hostId,phase:room.phase,
+  return {code:room.code,trackId:sanitizeTrackId(room.trackId),hostId:room.hostId,phase:room.phase,
     lapsTotal:LAP_COUNT,serverNow:now,
     countdown:room.phase==='countdown'?Math.max(0,Math.ceil((room.countdownEnds-now)/1000)):0,
     elapsed:room.startedAt?Math.max(0,(now-room.startedAt)/1000):0,
@@ -156,6 +159,6 @@ export function snapshot(room,now=Date.now()){
 export const saveRoom=room=>({...room,players:[...room.players.values()]});
 export function loadRoom(data,code){
   if(!data||data.version!==5||!Array.isArray(data.players))return makeRoom(code);
-  const room={...makeRoom(code),...data,code,players:new Map(data.players.map(p=>[p.id,p]))};
+  const room={...makeRoom(code),...data,code,trackId:sanitizeTrackId(data.trackId),players:new Map(data.players.map(p=>[p.id,p]))};
   return room;
 }

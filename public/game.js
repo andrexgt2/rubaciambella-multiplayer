@@ -1,7 +1,18 @@
-import {WORLD,ROAD_WIDTH,LAP_COUNT,CENTERLINE,TRACK_LENGTH,pointAt,closestTrack} from './track.js';
+import {WORLD,ROAD_WIDTH,LAP_COUNT,TRACK_OPTIONS,getTrack,sanitizeTrackId} from './track.js?v=gp12-2';
+import {drawTrackPreview} from './track-preview.js?v=gp12-2';
 import {makeRaceAudio} from './audio.js?v=gp10-1';
 import {bindSteering} from './steering.js?v=gp11-1';
 const $=id=>document.getElementById(id),clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
+let track=getTrack('creste'),CENTERLINE=track.centerline,TRACK_LENGTH=track.length;
+let pointAt=track.pointAt,closestTrack=track.closestTrack;
+const trackOption=id=>TRACK_OPTIONS.find(t=>t.id===sanitizeTrackId(id));
+const trackName=id=>trackOption(id)?.name||'Circuito delle Creste';
+function renderChoicePreview(id){
+  const selected=sanitizeTrackId(id);
+  drawTrackPreview($('trackPreview'),getTrack(selected));
+  $('trackPreview').setAttribute('aria-label','Anteprima di '+trackName(selected));
+  $('trackPreviewCaption').textContent=trackOption(selected)?.detail||'';
+}
 const canvas=$('trackCanvas'),ctx=canvas.getContext('2d',{alpha:false});
 const state={socket:null,room:null,playerId:null,server:null,connected:false,version:0,lastPacket:0,
   keys:{gas:false,brake:false,steer:0},name:'',oldPhase:'',lastLap:0,lastHit:0,lastCountdown:0,toastTimer:0,recordsOpen:false};
@@ -41,11 +52,17 @@ function renderRecords(message=''){
     row.append(pos,name,time);list.append(row);
   }
 }
+function recordsTrackId(){
+  return sanitizeTrackId(state.server?.trackId||($('codeInput').value.trim()?'creste':$('trackSelect').value));
+}
 async function loadRecords(){
+  const trackId=recordsTrackId();
+  $('recordsCircuitNote').textContent='I 20 migliori giri su '+trackName(trackId)+', registrati online e conservati tra le gare.';
   try{
-    const response=await fetch('/api/leaderboard',{cache:'no-store'});
+    const response=await fetch('/api/leaderboard?track='+encodeURIComponent(trackId),{cache:'no-store'});
     if(!response.ok)throw new Error('HTTP '+response.status);
     const json=await response.json();
+    if(trackId!==recordsTrackId())return;
     cachedRecords=Array.isArray(json.records)?json.records.slice(0,20):[];
     renderRecords();
   }catch(_){renderRecords('Classifica non disponibile: verifica la connessione e riprova.');}
@@ -62,8 +79,28 @@ for(const button of document.querySelectorAll('[data-open-records]'))button.addE
 $('closeRecords').addEventListener('click',closeRecords);
 $('refreshRecords').addEventListener('click',loadRecords);
 loadRecords();
+$('codeInput').addEventListener('input',()=>{
+  const joining=Boolean($('codeInput').value.trim());
+  $('trackSelect').disabled=joining;
+  $('trackChoice').classList.toggle('joining',joining);
+  $('trackPreviewCaption').textContent=joining?'Il circuito apparirà dopo l’ingresso nella stanza.':trackOption($('trackSelect').value)?.detail||'';
+  $('trackHelp').textContent=joining
+    ?'Circuito deciso dal capostanza: la tua scelta non modifica la stanza.'
+    :'Tracciati compatti: per gli invitati vale il circuito scelto dal capostanza.';
+});
+$('trackSelect').disabled=Boolean($('codeInput').value.trim());
+$('trackChoice').classList.toggle('joining',$('trackSelect').disabled);
+renderChoicePreview($('trackSelect').value);
+if($('trackSelect').disabled)$('trackPreviewCaption').textContent='Il circuito apparirà dopo l’ingresso nella stanza.';
+$('trackSelect').addEventListener('change',()=>{
+  if(!state.server&&!$('codeInput').value.trim()){
+    renderChoicePreview($('trackSelect').value);
+    activateTrack($('trackSelect').value);
+  }
+  if(state.recordsOpen)loadRecords();
+});
 
-function connect(name,code){
+function connect(name,code,trackId='creste'){
   const v=++state.version;state.name=name;state.room=code||newCode();state.playerId=null;state.connected=false;state.server=null;
   if(state.socket){state.socket.onclose=null;state.socket.close();}
   $('joinError').textContent='';$('joinBtn').disabled=true;$('joinBtn').innerHTML='CONNESSIONE...';
@@ -76,7 +113,7 @@ function connect(name,code){
     ws.addEventListener('open',()=>{
       if(state.version!==v)return;
       let resume='';try{resume=sessionStorage.getItem('gridline_resume_'+state.room)||'';}catch(_){ }
-      send('join',{name,resume});
+      send('join',{name,resume,trackId:sanitizeTrackId(trackId)});
     });
     ws.addEventListener('message',e=>{
       let msg;try{msg=JSON.parse(e.data);}catch(_){return;}
@@ -89,6 +126,7 @@ function connect(name,code){
         try{localStorage.setItem('gridline_name',name);}catch(_){ }
       }else if(msg.type==='state'){
         if(!joined)return;
+        activateTrack(msg.state.trackId);
         state.server=msg.state;state.lastPacket=performance.now();updateUI();
       }else if(msg.type==='join_error'||msg.type==='error'){
         $('joinError').textContent=msg.message||'Impossibile entrare nella stanza.';
@@ -108,7 +146,8 @@ function connect(name,code){
 $('joinForm').addEventListener('submit',event=>{
   event.preventDefault();
   unlockAudio(); // anche gli invitati attivano i suoni prima del semaforo.
-  connect($('nameInput').value.trim().slice(0,16)||'Pilota', $('codeInput').value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6));
+  const code=$('codeInput').value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
+  connect($('nameInput').value.trim().slice(0,16)||'Pilota',code,code?'creste':$('trackSelect').value);
 });
 $('startBtn').addEventListener('click',()=>{unlockAudio();send('start');try{screen.orientation?.lock?.('landscape').catch(()=>{});}catch(_){}});
 $('againBtn').addEventListener('click',()=>{unlockAudio();send('start');});
@@ -141,6 +180,7 @@ function updateUI(){
   if(state.oldPhase==='results'&&s.phase==='countdown'){state.lastLap=0;state.lastHit=0;state.lastCountdown=0;}
   state.oldPhase=s.phase;
   $('inviteCode').textContent=s.code;$('lobbyCount').textContent=s.players.length+' / 8';
+  $('lobbyTrackName').textContent='CIRCUITO · '+trackName(s.trackId).toUpperCase();
   $('hudRoom').textContent=s.code;
   $('lobbyPlayers').replaceChildren(...s.players.map(p=>{
     const el=document.createElement('span');el.className='pilot-pill';
@@ -226,10 +266,11 @@ setInterval(()=>{if(state.connected&&state.playerId)send('input',{keys:state.key
 const surface=document.createElement('canvas');surface.width=WORLD.width;surface.height=WORLD.height;
 const sc=surface.getContext('2d',{alpha:false});
 function seeded(seed){let x=seed;return()=>{x=(Math.imul(x,1664525)+1013904223)>>>0;return x/4294967296;};}
-const rand=seeded(84563);
+let rand=seeded(84563);
 function roadPath(c){c.beginPath();c.moveTo(CENTERLINE[0].x,CENTERLINE[0].y);
   for(let i=1;i<CENTERLINE.length;i++)c.lineTo(CENTERLINE[i].x,CENTERLINE[i].y);c.closePath();}
 function paintSurface(){
+  rand=seeded(84563);
   const bg=sc.createLinearGradient(0,0,WORLD.width,WORLD.height);bg.addColorStop(0,'#3d644d');bg.addColorStop(.6,'#365946');bg.addColorStop(1,'#2c4f42');sc.fillStyle=bg;sc.fillRect(0,0,WORLD.width,WORLD.height);
   // Fasce d'erba, trame e vegetazione fuori dal tracciato.
   for(let i=0;i<32;i++){sc.fillStyle=i%2?'#ffffff04':'#061d0e0a';sc.fillRect(0,i*53,WORLD.width,26);}
@@ -293,6 +334,28 @@ function paintSurface(){
     sc.fillStyle='#e9f65b';sc.fillRect(-4,-ROAD_WIDTH/2-20,8,18);sc.fillRect(-4,ROAD_WIDTH/2+2,8,18);sc.restore();}
 }
 paintSurface();
+let lastLobbyPreviewId=null;
+function activateTrack(id){
+  const next=getTrack(id);
+  // Gli snapshot multiplayer arrivano ogni 100 ms: la miniatura si ridisegna
+  // solo quando cambia pista, evitando lavoro inutile durante la corsa.
+  if(lastLobbyPreviewId!==next.id){
+    drawTrackPreview($('lobbyTrackPreview'),next);
+    $('lobbyTrackPreview').setAttribute('aria-label','Mappa di '+trackName(next.id));
+    lastLobbyPreviewId=next.id;
+  }
+  if($('trackSelect').value!==next.id||$('trackChoice').classList.contains('joining')){
+    $('trackSelect').value=next.id;
+    renderChoicePreview(next.id);
+    $('trackChoice').classList.remove('joining');
+  }
+  if(next===track)return;
+  track=next;CENTERLINE=next.centerline;TRACK_LENGTH=next.length;
+  pointAt=next.pointAt;closestTrack=next.closestTrack;
+  $('trackBanner').textContent=trackName(id).toUpperCase()+' · '+LAP_COUNT+' GIRI · ONLINE';
+  paintSurface();
+  visible.clear();
+}
 function carShape(p,isMe,elapsed){
   const speed=Math.hypot(p.vx||0,p.vy||0),fast=speed>230;
   ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.angle);
