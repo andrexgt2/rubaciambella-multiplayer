@@ -18,7 +18,14 @@ Un gioco **multiplayer di corse con monoposto** progettato per smartphone in ori
 
 La camera segue la monoposto, quindi la tua macchina resta vicino al centro dello schermo. Le barriere impediscono di tagliare fuori dal circuito. I piloti che entrano durante una gara diventano spettatori fino alla rivincita. Se Safari si riconnette entro circa 12 secondi, il pilota riprende lo stesso posto in gara.
 
-## Audio e classifica persistente · v10 (attuale)
+## Controlli smartphone · v11 (attuale)
+
+- **Sterzo anti-blocco:** il rilascio del dito viene rilevato sia sull'elemento sia sulla finestra, inclusi `pointercancel` e perdita della cattura.
+- **Recupero multitouch:** gli eventi touch verificano quale dito stava sterzando: sollevare il dito dello sterzo rimette le ruote dritte anche se GAS rimane premuto.
+- Un tocco successivo sullo sterzo sostituisce un puntatore eventualmente rimasto orfano. I controlli si azzerano anche passando a fine gara, perdendo il focus o alla disconnessione.
+- Test automatici dedicati per perdita di `pointerup`, `touchcancel`, multitouch e recupero senza ricaricare.
+
+## Audio e classifica persistente · v10
 
 - **Motore a regime continuo:** nessun cambio o taglio di potenza. Il server calcola accelerazione, resistenza aerodinamica e un RPM inerziale; il telefono ricostruisce localmente il proprio RPM a 60 FPS in base alla velocita' e al pedale GAS, evitando scatti dovuti ai pacchetti multiplayer.
 - Due campioni locali CC0 di automobile da corsa sono miscelati con Web Audio mediante crossfade e pitch automatici: il suono e' una simulazione, **non una registrazione F1 autentica**. Un basso strato originale di impulsi V8 (4 accensioni per giro) e aspirazione filtrata arricchiscono il timbro. Non c'e' streaming esterno Myinstants e l'audio torna silenzioso fuori gara.
