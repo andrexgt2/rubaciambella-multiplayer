@@ -1,10 +1,18 @@
-import {WORLD,ROAD_WIDTH,LAP_COUNT,TRACK_OPTIONS,getTrack,sanitizeTrackId} from './track.js?v=gp12-1';
+import {WORLD,ROAD_WIDTH,LAP_COUNT,TRACK_OPTIONS,getTrack,sanitizeTrackId} from './track.js?v=gp12-2';
+import {drawTrackPreview} from './track-preview.js?v=gp12-2';
 import {makeRaceAudio} from './audio.js?v=gp10-1';
 import {bindSteering} from './steering.js?v=gp11-1';
 const $=id=>document.getElementById(id),clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
 let track=getTrack('creste'),CENTERLINE=track.centerline,TRACK_LENGTH=track.length;
 let pointAt=track.pointAt,closestTrack=track.closestTrack;
-const trackName=id=>TRACK_OPTIONS.find(t=>t.id===sanitizeTrackId(id))?.name||'Circuito delle Creste';
+const trackOption=id=>TRACK_OPTIONS.find(t=>t.id===sanitizeTrackId(id));
+const trackName=id=>trackOption(id)?.name||'Circuito delle Creste';
+function renderChoicePreview(id){
+  const selected=sanitizeTrackId(id);
+  drawTrackPreview($('trackPreview'),getTrack(selected));
+  $('trackPreview').setAttribute('aria-label','Anteprima di '+trackName(selected));
+  $('trackPreviewCaption').textContent=trackOption(selected)?.detail||'';
+}
 const canvas=$('trackCanvas'),ctx=canvas.getContext('2d',{alpha:false});
 const state={socket:null,room:null,playerId:null,server:null,connected:false,version:0,lastPacket:0,
   keys:{gas:false,brake:false,steer:0},name:'',oldPhase:'',lastLap:0,lastHit:0,lastCountdown:0,toastTimer:0,recordsOpen:false};
@@ -74,13 +82,21 @@ loadRecords();
 $('codeInput').addEventListener('input',()=>{
   const joining=Boolean($('codeInput').value.trim());
   $('trackSelect').disabled=joining;
+  $('trackChoice').classList.toggle('joining',joining);
+  $('trackPreviewCaption').textContent=joining?'Il circuito apparirà dopo l’ingresso nella stanza.':trackOption($('trackSelect').value)?.detail||'';
   $('trackHelp').textContent=joining
     ?'Circuito deciso dal capostanza: la tua scelta non modifica la stanza.'
     :'Tracciati compatti: per gli invitati vale il circuito scelto dal capostanza.';
 });
 $('trackSelect').disabled=Boolean($('codeInput').value.trim());
+$('trackChoice').classList.toggle('joining',$('trackSelect').disabled);
+renderChoicePreview($('trackSelect').value);
+if($('trackSelect').disabled)$('trackPreviewCaption').textContent='Il circuito apparirà dopo l’ingresso nella stanza.';
 $('trackSelect').addEventListener('change',()=>{
-  if(!state.server&&!$('codeInput').value.trim())activateTrack($('trackSelect').value);
+  if(!state.server&&!$('codeInput').value.trim()){
+    renderChoicePreview($('trackSelect').value);
+    activateTrack($('trackSelect').value);
+  }
   if(state.recordsOpen)loadRecords();
 });
 
@@ -320,6 +336,11 @@ function paintSurface(){
 paintSurface();
 function activateTrack(id){
   const next=getTrack(id);
+  drawTrackPreview($('lobbyTrackPreview'),next);
+  $('lobbyTrackPreview').setAttribute('aria-label','Mappa di '+trackName(next.id));
+  $('trackSelect').value=next.id;
+  renderChoicePreview(next.id);
+  $('trackChoice').classList.remove('joining');
   if(next===track)return;
   track=next;CENTERLINE=next.centerline;TRACK_LENGTH=next.length;
   pointAt=next.pointAt;closestTrack=next.closestTrack;
