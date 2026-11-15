@@ -8,7 +8,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "test": "node --test test/*.test.js",
-    "check": "node --check public/track.js && node --check public/powertrain.js && node --check public/audio.js && node --check public/steering.js && node --check public/game.js && node --check src/engine.js && node --check src/index.js"
+    "check": "node --check public/track.js && node --check public/track-preview.js && node --check public/powertrain.js && node --check public/audio.js && node --check public/steering.js && node --check public/game.js && node --check src/engine.js && node --check src/index.js"
   },
   "devDependencies": {
     "wrangler": "^4.45.0"
