@@ -18,7 +18,25 @@ Un gioco **multiplayer di corse con monoposto** progettato per smartphone in ori
 
 La camera segue la monoposto, quindi la tua macchina resta vicino al centro dello schermo. Le barriere impediscono di tagliare fuori dal circuito. I piloti che entrano durante una gara diventano spettatori fino alla rivincita. Se Safari si riconnette entro circa 12 secondi, il pilota riprende lo stesso posto in gara.
 
-## Controlli smartphone · v11 (attuale)
+## Scelta del circuito · v12 (prototipo)
+
+Nella schermata iniziale, lascia vuoto il codice stanza e scegli la pista.
+Chi crea la stanza ne decide il circuito; chi entra con un codice eredita quello
+dell'host e non puo' sostituirlo a gara in corso.
+
+- **Circuito delle Creste:** pista originale, invariata.
+- **Monza (Italia):** layout compatto ispirato alle curve storiche e ai rettilinei veloci.
+- **Spa-Francorchamps (Belgio):** layout compatto ispirato alle sezioni tecniche e al Kemmel.
+
+Le forme sono ricostruzioni semplificate per il gameplay: conservano proporzioni
+sullo schermo tramite un fattore uniforme sugli assi (non sono mappe FIA al
+centimetro). La simulazione usa per ciascuna pista la stessa geometria su
+browser e server per asfalto, barriere, griglia, giri e classifiche.
+I record sono separati per circuito; i record precedenti delle Creste restano
+disponibili. Tutti i circuiti sono omaggi geografici non ufficiali, senza
+loghi o marchi commerciali della Formula 1.
+
+## Controlli smartphone · v11
 
 - **Sterzo anti-blocco:** il rilascio del dito viene rilevato sia sull'elemento sia sulla finestra, inclusi `pointercancel` e perdita della cattura.
 - **Recupero multitouch:** gli eventi touch verificano quale dito stava sterzando: sollevare il dito dello sterzo rimette le ruote dritte anche se GAS rimane premuto.
