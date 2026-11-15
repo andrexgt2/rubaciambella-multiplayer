@@ -64,3 +64,20 @@
   .panel select{height:37px}
   .panel .track-help{margin:3px 0 0}
 }
+
+/* v12 · Miniature delle piste generate dalla stessa geometria della gara. */
+.track-choice{display:flex;align-items:stretch;gap:9px;width:100%;min-width:0}
+.track-choice select{flex:1 1 auto;width:0;min-width:0;height:auto;min-height:76px}
+.track-choice canvas{width:116px;height:76px;flex:0 0 116px;
+  border:1px solid #668b6c;border-radius:7px;display:block;background:#0c1d23}
+.track-choice.joining canvas{opacity:.42;filter:grayscale(.8)}
+.track-preview-caption{color:var(--acid);font:800 11px var(--display);letter-spacing:1px;
+  margin:5px 0 0;min-height:13px}
+.lobby-track-preview{display:block;width:min(100%,320px);height:79px;object-fit:fill;
+  background:#0c1d23;border:1px solid #526d6a;border-radius:6px;margin:5px 0 8px}
+@media(pointer:coarse) and (orientation:landscape) and (max-height:460px){
+  .track-choice select{min-height:55px}
+  .track-choice canvas{width:98px;height:55px;flex-basis:98px}
+  .track-preview-caption{margin-top:2px;font-size:10px}
+  .lobby-track-preview{height:59px}
+}
