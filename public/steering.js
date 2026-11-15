@@ -35,7 +35,7 @@ export function bindSteering({pad,thumb,onChange,onStart=()=>{},root=window,doc=
   // Rileva quale dito e' lo sterzo, anche quando un altro dito tiene GAS premuto.
   doc.addEventListener('touchstart',e=>{
     if(activePointer===null||activeTouch!==null)return;
-    for(const touch of e.changedTouches){
+    for(const touch of Array.from(e.changedTouches)){
       if(pad.contains(touch.target)){activeTouch=touch.identifier;break;}
     }
   },{capture:true,passive:true});
