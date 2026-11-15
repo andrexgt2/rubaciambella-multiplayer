@@ -161,7 +161,7 @@ export class GameRoom {
 export default {
   async fetch(request,env){
     const url=new URL(request.url);
-    if(url.pathname==='/api/health')return json({ok:true,service:'GRIDLINE GP',version:12});
+    if(url.pathname==='/api/health')return json({ok:true,service:'GRIDLINE GP',version:6});
     if(url.pathname==='/api/leaderboard'){
       if(request.method!=='GET')return json({error:'Solo lettura'},405);
       const board=env.GAME_ROOMS.get(env.GAME_ROOMS.idFromName(RECORDS_ID));
