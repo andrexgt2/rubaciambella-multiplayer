@@ -87,8 +87,8 @@ test('i record delle cinque piste sono indipendenti',async()=>{
   assert.equal((await post('monza','PilotaMonza',44000)).status,200);
   assert.equal((await post('spa','PilotaSpa',73000)).status,200);
   assert.equal((await post('monaco','PilotaMonaco',69000)).status,200);
-  assert.equal((await post('silverstone','PilotaSilverstone',67000)).status,200);
-  for(const [id,name] of [['creste','PilotaOriginale'],['monza','PilotaMonza'],['spa','PilotaSpa'],['monaco','PilotaMonaco'],['silverstone','PilotaSilverstone']]){
+  assert.equal((await post('silverstone','PilotaSilver',67000)).status,200);
+  for(const [id,name] of [['creste','PilotaOriginale'],['monza','PilotaMonza'],['spa','PilotaSpa'],['monaco','PilotaMonaco'],['silverstone','PilotaSilver']]){
     const response=await board.fetch(new Request('https://internal/internal/records?track='+id));
     const data=await response.json();
     assert.deepEqual(data.records.map(r=>r.name),[name]);
