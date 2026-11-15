@@ -1,5 +1,6 @@
 import {WORLD,ROAD_WIDTH,LAP_COUNT,CENTERLINE,TRACK_LENGTH,pointAt,closestTrack} from './track.js';
 import {makeRaceAudio} from './audio.js?v=gp10-1';
+import {bindSteering} from './steering.js?v=gp11-1';
 const $=id=>document.getElementById(id),clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
 const canvas=$('trackCanvas'),ctx=canvas.getContext('2d',{alpha:false});
 const state={socket:null,room:null,playerId:null,server:null,connected:false,version:0,lastPacket:0,
@@ -121,6 +122,7 @@ function updateUI(){
   const s=state.server;if(!s)return;
   const me=getMe();
   const active=['racing','countdown'].includes(s.phase);
+  if(!active&&['racing','countdown'].includes(state.oldPhase))releaseAll();
   if(active)state.recordsOpen=false;
   const currentPhase=me?.spectator&&active?'spectator':s.phase;
   document.body.classList.toggle('game-active',active);
@@ -181,38 +183,31 @@ function updateUI(){
 }
 // Comandi touch: una mano sterza, l'altra tiene premuti i pedali.
 const steerPad=$('steerPad'),steerThumb=$('steerThumb'),controls=$('touchControls');
-let steerPointer=null;const pedalPointers=new Map();
-function steerTo(e){
-  const r=steerPad.getBoundingClientRect(),range=Math.max(1,(r.width-83)/2),x=e.clientX-(r.left+r.width/2);
-  const v=clamp(x/range,-1,1);state.keys.steer=Math.abs(v)<.10?0:v;
-  steerThumb.style.transform=`translateX(${(state.keys.steer*range).toFixed(1)}px)`;
-  steerPad.classList.toggle('pressed',Math.abs(state.keys.steer)>.12);
+const steering=bindSteering({pad:steerPad,thumb:steerThumb,
+  onChange:v=>{state.keys.steer=v;},onStart:unlockAudio});
+const pedalPointers=new Map();
+function releasePedal(e){
+  const control=pedalPointers.get(e.pointerId);
+  if(!control)return;
+  pedalPointers.delete(e.pointerId);
+  state.keys[control]=[...pedalPointers.values()].includes(control);
+  controls.querySelector(`[data-control="${control}"]`).classList.toggle('pressed',state.keys[control]);
 }
-steerPad.addEventListener('pointerdown',e=>{
-  if(steerPointer!==null)return;e.preventDefault();unlockAudio();steerPointer=e.pointerId;
-  try{steerPad.setPointerCapture(e.pointerId);}catch(_){ }steerTo(e);
-});
-steerPad.addEventListener('pointermove',e=>{if(e.pointerId===steerPointer){e.preventDefault();steerTo(e);}});
-function releaseSteer(e){if(e.pointerId!==steerPointer)return;steerPointer=null;state.keys.steer=0;steerThumb.style.transform='translateX(0px)';steerPad.classList.remove('pressed');}
-for(const ev of ['pointerup','pointercancel','lostpointercapture'])steerPad.addEventListener(ev,releaseSteer);
 for(const button of controls.querySelectorAll('[data-control]')){
   const key=button.dataset.control;
   button.addEventListener('pointerdown',e=>{
     e.preventDefault();unlockAudio();try{button.setPointerCapture(e.pointerId);}catch(_){ }
     pedalPointers.set(e.pointerId,key);state.keys[key]=true;button.classList.add('pressed');
   });
-  const release=e=>{
-    if(!pedalPointers.has(e.pointerId))return;
-    const control=pedalPointers.get(e.pointerId);pedalPointers.delete(e.pointerId);
-    state.keys[control]=[...pedalPointers.values()].includes(control);
-    button.classList.toggle('pressed',state.keys[control]);
-  };
-  for(const ev of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(ev,release);
+  for(const ev of ['pointerup','pointercancel','lostpointercapture'])
+    button.addEventListener(ev,releasePedal);
 }
+for(const ev of ['pointerup','pointercancel','lostpointercapture'])
+  window.addEventListener(ev,releasePedal,true);
 for(const ev of ['touchstart','touchmove'])controls.addEventListener(ev,e=>{if(e.cancelable)e.preventDefault();},{passive:false});
 for(const ev of ['contextmenu','selectstart','dragstart'])controls.addEventListener(ev,e=>e.preventDefault());
-function releaseAll(){state.keys.gas=false;state.keys.brake=false;state.keys.steer=0;
-  steerPointer=null;pedalPointers.clear();steerThumb.style.transform='translateX(0px)';steerPad.classList.remove('pressed');
+function releaseAll(){state.keys.gas=false;state.keys.brake=false;steering.reset();
+  pedalPointers.clear();
   for(const button of controls.querySelectorAll('.pressed'))button.classList.remove('pressed');
 }
 window.addEventListener('blur',releaseAll);window.addEventListener('pagehide',releaseAll);
