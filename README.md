@@ -21,12 +21,16 @@ La camera segue la monoposto, quindi la tua macchina resta vicino al centro dell
 ## Scelta del circuito · v12 (prototipo)
 
 Nella schermata iniziale, lascia vuoto il codice stanza e scegli la pista.
+La miniatura accanto al selettore e' generata con la stessa geometria usata dal gioco.
+La lobby mostra l'anteprima della pista scelta dal capostanza.
 Chi crea la stanza ne decide il circuito; chi entra con un codice eredita quello
 dell'host e non puo' sostituirlo a gara in corso.
 
 - **Circuito delle Creste:** pista originale, invariata.
 - **Monza (Italia):** layout compatto ispirato alle curve storiche e ai rettilinei veloci.
 - **Spa-Francorchamps (Belgio):** layout compatto ispirato alle sezioni tecniche e al Kemmel.
+- **Monaco:** layout cittadino compatto, con curve lente e sezioni del porto.
+- **Silverstone (Regno Unito):** layout veloce, con serie di curve ad ampio raggio.
 
 Le forme sono ricostruzioni semplificate per il gameplay: conservano proporzioni
 sullo schermo tramite un fattore uniforme sugli assi (non sono mappe FIA al
