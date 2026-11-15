@@ -76,3 +76,20 @@ test('solo il primo pilota decide la pista; gli invitati non possono cambiarla',
   assert.equal(host.messages.find(m=>m.type==='state').state.trackId,'monza');
   assert.equal(guest.messages.find(m=>m.type==='state').state.trackId,'monza');
 });
+
+test('i record di Monza e Spa sono indipendenti da quelli delle Creste',async()=>{
+  const ctx=new FakeCtx(),board=new GameRoom(ctx,{});
+  await ctx.ready;
+  const post=(trackId,name,ms)=>board.fetch(new Request('https://internal/internal/records',{
+    method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,ms,trackId})
+  }));
+  assert.equal((await post('creste','PilotaOriginale',58000)).status,200);
+  assert.equal((await post('monza','PilotaMonza',44000)).status,200);
+  assert.equal((await post('spa','PilotaSpa',73000)).status,200);
+  for(const [id,name] of [['creste','PilotaOriginale'],['monza','PilotaMonza'],['spa','PilotaSpa']]){
+    const response=await board.fetch(new Request('https://internal/internal/records?track='+id));
+    const data=await response.json();
+    assert.deepEqual(data.records.map(r=>r.name),[name]);
+    assert.equal(data.track,id);
+  }
+});
