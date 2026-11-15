@@ -9,7 +9,9 @@ export const RACE_LIMIT_MS=6*60*1000;
 export const TRACK_OPTIONS=Object.freeze([
   {id:'creste',name:'Circuito delle Creste',short:'LE CRESTE',detail:'Originale · misto'},
   {id:'monza',name:'Monza',short:'MONZA',detail:'Italia · rettilinei veloci'},
-  {id:'spa',name:'Spa-Francorchamps',short:'SPA',detail:'Belgio · curve tecniche'}
+  {id:'spa',name:'Spa-Francorchamps',short:'SPA',detail:'Belgio · curve tecniche'},
+  {id:'monaco',name:'Monaco',short:'MONACO',detail:'Principato · guida di precisione'},
+  {id:'silverstone',name:'Silverstone',short:'SILVERSTONE',detail:'Regno Unito · curve veloci'}
 ]);
 export const sanitizeTrackId=id=>TRACK_OPTIONS.some(t=>t.id===id)?id:'creste';
 
@@ -43,6 +45,30 @@ const SHAPES={
     [2310,940],[2280,1070],[2160,1210],[1980,1240],
     [1800,1110],[1600,990],[1440,915],[1250,920],
     [1060,1050],[885,1160],[700,1295]
+  ],
+  // Ricostruzioni stilizzate e allargate per la giocabilita' della monoposto.
+  // Monaco: Sainte Devote, salita al Casino, Grand Hotel, tunnel,
+  // chicane del porto, Piscine, Rascasse.
+  monaco:[
+    [330,1120],[235,1195],[160,1140],[200,970],[290,785],[390,600],
+    [530,390],[730,235],[900,165],[1030,260],[1180,365],
+    [1370,465],[1530,580],[1670,700],[1800,735],[1880,690],
+    [1930,520],[1940,390],[2080,340],[2300,330],[2420,435],
+    [2310,570],[2260,710],[2440,740],[2460,840],
+    [2250,1010],[2050,1120],[1810,1165],[1550,1130],
+    [1320,1045],[1100,955],[875,830],[710,690],
+    [620,590],[550,750],[470,875],[410,1020]
+  ],
+  // Silverstone: Copse, Maggotts/Becketts, Hangar, Stowe e Club.
+  silverstone:[
+    [370,420],[350,270],[460,180],[600,220],[680,350],[720,520],
+    [740,660],[830,760],[930,795],[1050,740],[1160,620],
+    [1360,420],[1560,240],[1690,190],[1790,240],[1820,330],
+    [1740,450],[1570,505],[1700,630],[1960,680],
+    [2110,760],[2250,940],[2270,1180],[2130,1320],
+    [1840,1380],[1570,1370],[1310,1375],[1140,1430],[1010,1390],
+    [840,1430],[710,1380],[590,1430],[440,1370],
+    [300,1280],[190,1080],[200,870],[300,700],[390,560]
   ]
 };
 function fitProportionally(nodes){
