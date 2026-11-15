@@ -7,8 +7,8 @@ import {GameRoom} from '../src/index.js';
 
 globalThis.crypto??={randomUUID};
 
-test('tre piste disponibili, ID sanitizzati e geometrie chiuse proporzionali',()=>{
-  assert.deepEqual(TRACK_OPTIONS.map(t=>t.id),['creste','monza','spa']);
+test('cinque piste disponibili, ID sanitizzati e geometrie chiuse proporzionali',()=>{
+  assert.deepEqual(TRACK_OPTIONS.map(t=>t.id),['creste','monza','spa','monaco','silverstone']);
   assert.equal(sanitizeTrackId('unknown'),'creste');
   for(const {id} of TRACK_OPTIONS){
     const track=getTrack(id);
@@ -25,7 +25,7 @@ test('tre piste disponibili, ID sanitizzati e geometrie chiuse proporzionali',()
 });
 
 test('server usa il circuito della stanza per griglia, checkpoint e snapshot',()=>{
-  for(const trackId of ['monza','spa']){
+  for(const trackId of ['monza','spa','monaco','silverstone']){
     const room=makeRoom('ABC234',trackId),track=getTrack(trackId);
     const p={id:'pilot',name:'Pilot',color:'#ffce45'};
     room.players.set('pilot',p);
@@ -77,7 +77,7 @@ test('solo il primo pilota decide la pista; gli invitati non possono cambiarla',
   assert.equal(guest.messages.find(m=>m.type==='state').state.trackId,'monza');
 });
 
-test('i record di Monza e Spa sono indipendenti da quelli delle Creste',async()=>{
+test('i record delle cinque piste sono indipendenti',async()=>{
   const ctx=new FakeCtx(),board=new GameRoom(ctx,{});
   await ctx.ready;
   const post=(trackId,name,ms)=>board.fetch(new Request('https://internal/internal/records',{
@@ -86,7 +86,9 @@ test('i record di Monza e Spa sono indipendenti da quelli delle Creste',async()=
   assert.equal((await post('creste','PilotaOriginale',58000)).status,200);
   assert.equal((await post('monza','PilotaMonza',44000)).status,200);
   assert.equal((await post('spa','PilotaSpa',73000)).status,200);
-  for(const [id,name] of [['creste','PilotaOriginale'],['monza','PilotaMonza'],['spa','PilotaSpa']]){
+  assert.equal((await post('monaco','PilotaMonaco',69000)).status,200);
+  assert.equal((await post('silverstone','PilotaSilverstone',67000)).status,200);
+  for(const [id,name] of [['creste','PilotaOriginale'],['monza','PilotaMonza'],['spa','PilotaSpa'],['monaco','PilotaMonaco'],['silverstone','PilotaSilverstone']]){
     const response=await board.fetch(new Request('https://internal/internal/records?track='+id));
     const data=await response.json();
     assert.deepEqual(data.records.map(r=>r.name),[name]);
