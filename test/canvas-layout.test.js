@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 const css=readFileSync(new URL('../public/style.css',import.meta.url),'utf8');
 const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
 
-test('solo il canvas della pista e' fullscreen; le miniature restano nel pannello',()=>{
+test("solo il canvas della pista e fullscreen; le miniature restano nel pannello",()=>{
   assert.match(css,/\.stage\s*>\s*#trackCanvas\s*\{[^}]*position:\s*absolute;[^}]*inset:\s*0;[^}]*width:\s*100%;[^}]*height:\s*100%;[^}]*\}/);
   assert.doesNotMatch(css,/\.stage\s+canvas\s*\{/,
     'una regola generica sui canvas posizionerebbe le miniature sopra la UI');
