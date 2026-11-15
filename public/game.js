@@ -1,4 +1,4 @@
-import {WORLD,ROAD_WIDTH,LAP_COUNT,TRACK_OPTIONS,getTrack,sanitizeTrackId} from './track.js';
+import {WORLD,ROAD_WIDTH,LAP_COUNT,TRACK_OPTIONS,getTrack,sanitizeTrackId} from './track.js?v=gp12-1';
 import {makeRaceAudio} from './audio.js?v=gp10-1';
 import {bindSteering} from './steering.js?v=gp11-1';
 const $=id=>document.getElementById(id),clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
